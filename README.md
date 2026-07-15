@@ -19,28 +19,28 @@ Bumping speaks like a caring older sister (知心姐姐): patient, warm, and rea
 | 🖼 **Image Analysis** | Analyze uploaded images (via GPT-4o-mini vision) |
 | 📰 **Webpage Fetch** | Extract and summarize webpage content |
 
-## Quick Start
+﻿## Quick Start
 
-> **You need an API key to use Bumping.** The app won't start without one.
-> Get a key from [DeepSeek](https://platform.deepseek.com/) (cheaper, recommended) or [OpenAI](https://platform.openai.com/).
+> **No terminal setup needed.** Just run the app and enter your API key in the browser.
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set your API key (pick one)
-# Windows PowerShell:
-#   $env:DEEPSEEK_API_KEY = "sk-your-deepseek-key"
-# macOS / Linux:
-#   export DEEPSEEK_API_KEY="sk-your-deepseek-key"
-
-# Or use OpenAI instead:
-#   $env:OPENAI_API_KEY = "sk-proj-your-openai-key"
-
-# 3. Run
+# 2. Start the server
 python chat_app.py
 
-# 4. Open http://localhost:5000
+# 3. Open http://localhost:5000
+#    The app will ask you to enter your API key in the browser.
+#    No terminal config needed!
+```
+
+Get a free API key from [DeepSeek](https://platform.deepseek.com/) (cheaper, recommended) or [OpenAI](https://platform.openai.com/).
+
+```bash
+# Or set via environment variable (for server deployments):
+# Windows PowerShell:    $env:DEEPSEEK_API_KEY = "sk-your-key"
+# macOS / Linux:         export DEEPSEEK_API_KEY="sk-your-key"
 ```
 
 ## Usage

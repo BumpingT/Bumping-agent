@@ -55,6 +55,21 @@
   .sidebar::-webkit-scrollbar { width: 4px; }
   .sidebar::-webkit-scrollbar-track { background: transparent; }
   .sidebar::-webkit-scrollbar-thumb { background: #d2d2d7; border-radius: 2px; }
+
+  .settings-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .settings-overlay.show { display: flex; }
+  .settings-modal { background: white; border-radius: 12px; padding: 28px; width: 380px; max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,0.15); }
+  .settings-modal h3 { margin: 0 0 16px; font-size: 16px; color: #1d1d1f; }
+  .settings-modal label { display: block; font-size: 12px; color: #86868b; margin-bottom: 4px; margin-top: 12px; }
+  .settings-modal select, .settings-modal input { width: 100%%; padding: 8px 12px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; }
+  .settings-modal select:focus, .settings-modal input:focus { border-color: #1d1d1f; }
+  .settings-modal .btn-row { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
+  .settings-modal .btn-primary { padding: 8px 20px; background: #1d1d1f; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .settings-modal .btn-primary:hover { opacity: 0.8; }
+  .settings-modal .btn-secondary { padding: 8px 20px; background: #f5f5f7; color: #1d1d1f; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%%; display: inline-block; margin-right: 4px; }
+  .status-dot.on { background: #30b94c; }
+  .status-dot.off { background: #ff453a; }
 </style>
 </head>
 <body>
@@ -82,6 +97,7 @@
   <div class="header">
     <span class="header-title" id="headerTitle">助手</span>
     <span class="header-tools" id="headerTools">9 个工具</span>
+    <button id="settingsBtn" onclick="showKeySetup()" style="background:transparent;border:none;cursor:pointer;font-size:16px;color:#86868b;padding:2px 4px;" title="API Key">⚙</button>
     <div class="header-lang">
       <button class="lang-btn" id="langZh" onclick="switchLang('zh')">中文</button>
       <button class="lang-btn" id="langEn" onclick="switchLang('en')">EN</button>
@@ -464,6 +480,79 @@ window.addEventListener('beforeunload', function() { try { sv(); } catch(e) {} }
 applyLang();
 ld();
 setTimeout(function() { try { refreshOldChats(); } catch(e) {} }, 500);
+
+function showKeySetup() { document.getElementById("settingsOverlay").classList.add("show"); }
+function hideKeySetup() { document.getElementById("settingsOverlay").classList.remove("show"); }
+function saveApiKey() {
+  var provider = document.getElementById("apiProvider").value;
+  var key = document.getElementById("apiKeyInput").value.trim();
+  if (!key) { alert("Please enter your API key"); return; }
+  var btn = document.getElementById("settingsSaveBtn");
+  btn.textContent = "Saving...";
+  btn.disabled = true;
+  fetch("/api/key", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({provider: provider, key: key})
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.ok) {
+      try { localStorage.setItem("api_provider", provider); localStorage.setItem("api_key", key); } catch(e) {}
+      hideKeySetup();
+      updateApiStatus();
+    } else {
+      alert("Error: " + (data.error || data.message));
+    }
+  }).catch(function(e) { alert("Network error: " + e.message); })
+  .finally(function() { btn.textContent = "Save"; btn.disabled = false; });
+}
+function updateApiStatus() {
+  fetch("/api/key/status").then(function(r) { return r.json(); }).then(function(data) {
+    var el = document.getElementById("settingsBtn");
+    if (data.configured) {
+      el.innerHTML = '<span class="status-dot on"></span>';
+      el.title = "API: " + data.provider;
+    } else {
+      el.innerHTML = '<span class="status-dot off"></span>';
+      el.title = "Click to set API Key";
+    }
+  }).catch(function() {});
+}
+function checkSavedKey() {
+  try {
+    var key = localStorage.getItem("api_key");
+    var provider = localStorage.getItem("api_provider");
+    if (key && provider) {
+      fetch("/api/key", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({provider: provider, key: key})
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) { updateApiStatus(); }
+        else { showKeySetup(); }
+      }).catch(function() {});
+    } else { setTimeout(showKeySetup, 500); }
+  } catch(e) {}
+  updateApiStatus();
+}
+if (document.readyState === "complete") { checkSavedKey(); }
+else { window.addEventListener("load", checkSavedKey); }
 </script>
+
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-modal">
+    <h3 id="settingsTitle">API Key</h3>
+    <label id="settingsProviderLabel">Provider</label>
+    <select id="apiProvider">
+      <option value="deepseek">DeepSeek (cheaper, recommended)</option>
+      <option value="openai">OpenAI (supports image analysis)</option>
+    </select>
+    <label id="settingsKeyLabel">API Key</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-..." />
+    <div class="btn-row">
+      <button class="btn-secondary" id="settingsCancelBtn" onclick="hideKeySetup()">Cancel</button>
+      <button class="btn-primary" onclick="saveApiKey()" id="settingsSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

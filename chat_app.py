@@ -379,6 +379,35 @@ def clean_response(text):
     return text.strip()
 agent = create_react_agent(llm, tools)
 
+
+# ====== API Key 配置 ======
+
+@app.route("/api/key", methods=["POST"])
+def set_api_key():
+    """Set or update the API key at runtime."""
+    data = request.get_json()
+    provider = data.get("provider", "").lower().strip()
+    api_key = data.get("key", "").strip()
+    if not provider or not api_key:
+        return jsonify({"ok": False, "error": "Provider and key are required"}), 400
+    if provider not in ("openai", "deepseek"):
+        return jsonify({"ok": False, "error": "Provider must be 'openai' or 'deepseek'"}), 400
+    ok, msg = init_agent(provider, api_key)
+    return jsonify({"ok": ok, "message": msg})
+
+@app.route("/api/key/status", methods=["GET"])
+def api_key_status():
+    """Check if an agent is configured."""
+    configured = agent is not None
+    provider = "unknown"
+    if configured:
+        # Peek at env for display
+        if os.environ.get("OPENAI_API_KEY"):
+            provider = "openai"
+        elif os.environ.get("DEEPSEEK_API_KEY"):
+            provider = "deepseek"
+    return jsonify({"configured": configured, "provider": provider})
+
 # ====== 消息转换 ======
 
 def to_langchain(msg: dict):
@@ -496,6 +525,9 @@ def chat():
     client_msgs = data.get("messages", [])
     lang = data.get("lang", "zh")
 
+    if agent is None:
+        return jsonify({"error": "API key not configured. Please set your API key first."}), 400
+
     try:
         lc_msgs = [SystemMessage(content=get_system_prompt(lang))] + [to_langchain(m) for m in client_msgs]
         result = agent.invoke({"messages": lc_msgs})
@@ -518,6 +550,11 @@ def chat_stream():
     data = request.get_json()
     client_msgs = data.get("messages", [])
     lang = data.get("lang", "zh")
+
+    if agent is None:
+        def generate():
+            yield f"event: error\ndata: {json.dumps({'error': 'API key not configured. Please set your API key first.'})}\n\n"
+        return Response(generate(), mimetype="text/event-stream")
 
     def generate():
         lc_msgs = [SystemMessage(content=get_system_prompt(lang))] + [to_langchain(m) for m in client_msgs]
