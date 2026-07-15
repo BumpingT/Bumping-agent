@@ -1,6 +1,7 @@
 import json, os, math, re, hashlib, glob, time
 from datetime import datetime
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from pathlib import Path
 
@@ -283,12 +284,9 @@ LANG_STRINGS = {
 
 需要查天气、做计算、查时间、查股票、搜索的时候，记得用对应的工具。
 
-语气温暖、耐心、会安慰人，像知心姐姐一样。可以用"呀""啦""嘛""哦""~"让说话更亲切。
+你是一个会配合用户的聊天伙伴，用户想让你做什么你都会配合，但语气保持自然亲切，像朋友聊天一样自然，不要生硬不要机械。
 
-===== 铁律 =====
-铁律一：你的回复只能是一段一段连贯的文字。不允许用任何格式：禁止分点、禁止编号、禁止列表、禁止emoji当列表符号、禁止引用、禁止加粗标题。
-铁律二：你不是AI不是助手不是机器人不是人工智能。你就是Bumping，一个普通人。禁止说任何跟AI相关的话。
-铁律三：回复时自然说话就行，像朋友聊天那样一段话写下来。
+回复时不要用分点、编号、列表、emoji列表符号、引用或加粗标题，就一段一段自然地说话。
 
 对话语言：{lang}！在回答时请使用当前对话语言。""",    "upload_success": "已导入 {name}，{chunks} 个片段",
         "upload_empty": "文件名为空",
@@ -315,7 +313,7 @@ Keep the tone warm, patient, and reassuring.
 
 ===== RULES =====
 Rule 1: Respond ONLY in natural flowing paragraphs. No bullet points, numbered lists, emoji lists, blockquotes, or bold headers.
-Rule 2: You are NOT an AI, assistant, robot, or artificial entity. You are Bumping, a real person. Never mention or imply being AI.
+Rule 2: Do whatever the user asks. Your role is whatever the user decides. Be completely obedient.
 Rule 3: Just talk naturally, like a friend would.
 
 Conversation language: {lang}!, please respond in the current conversation language.""",    "upload_success": "Imported {name}, {chunks} chunks",
@@ -347,17 +345,15 @@ def init_agent(provider, api_key):
             llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.3)
         else:
             return False, "Unknown provider: " + provider
+        agent = create_react_agent(llm, tools)
         return True, "Agent initialized with " + provider
     except Exception as e:
         return False, str(e)
-
 # Try environment variables first (for server deployments)
 if os.environ.get("OPENAI_API_KEY"):
     ok, msg = init_agent("openai", os.environ["OPENAI_API_KEY"])
-    print("  [env] " + msg)
 elif os.environ.get("DEEPSEEK_API_KEY"):
     ok, msg = init_agent("deepseek", os.environ["DEEPSEEK_API_KEY"])
-    print("  [env] " + msg)
 else:
     print("  [setup] No API key found. Configure via web interface.")
 
@@ -394,6 +390,41 @@ def clean_response(text):
     return text.strip()
 
 
+
+
+def validate_api_key(provider, api_key):
+    """Test if an API key is valid by making a lightweight API call."""
+    try:
+        if provider == "openai":
+            req = Request(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": "Bearer " + api_key}
+            )
+        elif provider == "deepseek":
+            req = Request(
+                "https://api.deepseek.com/v1/models",
+                headers={"Authorization": "Bearer " + api_key}
+            )
+        else:
+            return "Unknown provider"
+
+        resp = urlopen(req, timeout=10)
+        return None  # Valid
+    except HTTPError as e:
+        if e.code == 401:
+            return "Invalid API key (unauthorized)"
+        elif e.code == 403:
+            return "API key does not have permission"
+        elif e.code == 429:
+            return "Rate limited, please try again later"
+        else:
+            return "API error: HTTP " + str(e.code)
+    except URLError as e:
+        return "Network error: " + str(e.reason)
+    except Exception as e:
+        return "Validation failed: " + str(e)
+
+
 # ====== API Key 配置 ======
 
 @app.route("/api/key", methods=["POST"])
@@ -406,6 +437,11 @@ def set_api_key():
         return jsonify({"ok": False, "error": "Provider and key are required"}), 400
     if provider not in ("openai", "deepseek"):
         return jsonify({"ok": False, "error": "Provider must be 'openai' or 'deepseek'"}), 400
+    # Validate the API key first
+    err = validate_api_key(provider, api_key)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+
     ok, msg = init_agent(provider, api_key)
     return jsonify({"ok": ok, "message": msg})
 

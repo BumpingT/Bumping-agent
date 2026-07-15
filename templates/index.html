@@ -214,6 +214,7 @@ try {
 
 let allMessages = [];
 let streamingDiv = null;
+let currentChatId = null;
 
 function sv() { try { localStorage.setItem("chat", JSON.stringify(allMessages)); } catch(e) {} }
 function ld() {
@@ -444,9 +445,19 @@ function refreshOldChats() {
       var ts = new Date(parseInt(key.split("_")[1]));
       var timeStr = ts.toLocaleString(currentLang === 'zh' ? "zh-CN" : "en-US");
       var data = JSON.parse(localStorage.getItem(key));
-      var preview = (data && data.length > 0 ? data[0].content : "...");
-      return "<div class='doc-item' onclick='restoreChat(\"" + key + "\")' style='cursor:pointer'>" +
-        "<div class='doc-name'>" + (preview.length > 15 ? preview.slice(0, 15) : preview) + "</div>" +
+      // Generate title from first user message
+      var title = "新对话";
+      if (data && data.length > 0) {
+        for (var j = 0; j < data.length; j++) {
+          if (data[j].role === "user") {
+            title = data[j].content.replace(/[\n\r]+/g, " ").trim();
+            if (title.length > 22) title = title.slice(0, 22) + "...";
+            break;
+          }
+        }
+      }
+      return "<div class='doc-item' onclick='restoreChat(\"" + key + "\")' style='cursor:pointer;position:relative'>" + "<span class='doc-del' onclick='event.stopPropagation();deleteChat(\"" + key + "\")' style='position:absolute;top:4px;right:6px;font-size:14px;'>&times;</span>" +
+        "<div class='doc-name'>" + title + "</div>" +
         "<div class='doc-meta'>" + timeStr + "</div></div>";
     } catch(e) {
       console.log("Skipping invalid key:", key, e);
@@ -535,6 +546,22 @@ function checkSavedKey() {
 }
 if (document.readyState === "complete") { checkSavedKey(); }
 else { window.addEventListener("load", checkSavedKey); }
+
+function deleteChat(key) {
+  if (!confirm("确认删除这个对话？")) return;
+  try {
+    localStorage.removeItem(key);
+    refreshOldChats();
+  } catch(e) {}
+}
+
+function deleteChat(key) {
+  if (!confirm(t("confirmDelete"))) return;
+  try {
+    localStorage.removeItem(key);
+    refreshOldChats();
+  } catch(e) {}
+}
 </script>
 
 <div class="settings-overlay" id="settingsOverlay">
