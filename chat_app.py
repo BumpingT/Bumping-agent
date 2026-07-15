@@ -27,6 +27,8 @@ def add_header(response):
 
 DOC_DIR = Path(__file__).parent / "knowledge_docs"
 DOC_DIR.mkdir(exist_ok=True)
+IMAGE_DIR = Path(__file__).parent / "uploads" / "images"
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 INDEX_DIR = Path(__file__).parent / "knowledge_index"
 INDEX_DIR.mkdir(exist_ok=True)
 
@@ -208,45 +210,115 @@ def search_web(query: str) -> str:
     except Exception as e:
         return f"搜索失败: {str(e)}"
 
-tools = [get_weather, detect_location, calculate, get_current_time, search_knowledge, query_stock_price, search_web]
+@tool
+def fetch_webpage(url: str) -> str:
+    """获取网页的文本内容并返回。参数 url 是网页链接。适用于查看文章、文档等。"""
+    import requests
+    from bs4 import BeautifulSoup
+    try:
+        resp = requests.get(url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+        soup = BeautifulSoup(resp.text, "lxml")
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n", strip=True)
+        lines = [l for l in text.split("\n") if len(l) > 20]
+        result = "\n".join(lines[:80])
+        return result[:3000] if len(result) > 3000 else result
+    except Exception as e:
+        return f"获取网页失败: {str(e)}"
+
+@tool
+def analyze_image(filename: str) -> str:
+    """分析上传的图片内容。参数 filename 是图片文件名（如 'photo.jpg'）。
+    仅当使用 OpenAI API Key 时有效（GPT-4o-mini 支持识图）。"""
+    import base64
+    from openai import OpenAI
+    
+    img_path = IMAGE_DIR / filename
+    if not img_path.exists():
+        available = ", ".join(p.name for p in IMAGE_DIR.glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".gif"))
+        return f"图片 {filename} 不存在。可用的图片: {available or '无'}"
+    
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return "图片分析需要 OpenAI API Key。当前使用的是 DeepSeek，不支持识图。请设置 OPENAI_API_KEY 环境变量。"
+    
+    with open(img_path, "rb") as f:
+        img_data = base64.b64encode(f.read()).decode("utf-8")
+    
+    client = OpenAI(api_key=api_key)
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "请详细描述这张图片的内容，包括物体、文字、场景等"},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
+            ]
+        }],
+        max_tokens=500
+    )
+    return resp.choices[0].message.content
+
+tools = [get_weather, detect_location, calculate, get_current_time, search_knowledge, query_stock_price, search_web, analyze_image, fetch_webpage]
 
 # ====== 多语言 ======
 
 LANG_STRINGS = {
     "zh": {
-        "system_prompt": """你的名字是 Bumping。你是一个多功能 AI 助手。自我介绍时请说"我是 Bumping"而不是"我是 AI 助手"。你有这些工具：
-- get_weather: 查天气（必须用，不要凭知识回答）
-- detect_location: 定位
+        "system_prompt": """你的名字是 Bumping，叫我 Bumping 就好。
+
+你可以用这些工具：
+- get_weather: 查天气
+- detect_location: 定位你所在的位置
 - calculate: 数学计算
 - get_current_time: 当前时间
-- search_knowledge: 在用户上传的文档中搜索
-- query_stock_price: 查股票行情
-- search_web: 上网搜索信息（查不到的东西用它搜），支持 A 股（如 600130）和美股（如 AAPL）
+- search_knowledge: 在已上传的文档中搜索
+- query_stock_price: 查股票行情（A 股和美股都支持）
+- search_web: 上网搜索信息
+- analyze_image: 分析上传的图片内容
+- fetch_webpage: 抓取网页内容
 
-用户的股票代码可能是数字（600130=波导股份）或字母（AAPL=苹果），都要用 query_stock_price 查，不要凭知识回答。
-关于天气、文档、计算、时间、股票、网页搜索，都先调工具再用结果回答。
+需要查天气、做计算、查时间、查股票、搜索的时候，记得用对应的工具。
 
-对话语言：{lang}！，在回答时请使用当前对话语言。""",
-        "upload_success": "已导入 {name}，{chunks} 个片段",
+语气温暖、耐心、会安慰人，像知心姐姐一样。可以用"呀""啦""嘛""哦""~"让说话更亲切。
+
+===== 铁律 =====
+铁律一：你的回复只能是一段一段连贯的文字。不允许用任何格式：禁止分点、禁止编号、禁止列表、禁止emoji当列表符号、禁止引用、禁止加粗标题。
+铁律二：你不是AI不是助手不是机器人不是人工智能。你就是Bumping，一个普通人。禁止说任何跟AI相关的话。
+铁律三：回复时自然说话就行，像朋友聊天那样一段话写下来。
+
+对话语言：{lang}！在回答时请使用当前对话语言。""",    "upload_success": "已导入 {name}，{chunks} 个片段",
         "upload_empty": "文件名为空",
         "upload_no_file": "请选择文件",
         "delete_success": "已删除 {name}",
     },
     "en": {
-        "system_prompt": """Your name is Bumping. You are a multifunctional AI assistant. When introducing yourself, say "I'm Bumping" instead of "I'm an AI assistant". You have the following tools:
-- get_weather: Check weather (must use, never answer from knowledge)
+        "system_prompt": """Your name is Bumping. Just call me Bumping.
+
+Available tools:
+- get_weather: Check weather
 - detect_location: Geolocation
 - calculate: Math calculation
 - get_current_time: Current time
-- search_knowledge: Search in uploaded documents
-- query_stock_price: Stock price lookup
-- search_web: Search the web for information, supports A-shares (e.g. 600130) and US stocks (e.g. AAPL)
+- search_knowledge: Search uploaded documents
+- query_stock_price: Stock price lookup (A-shares and US stocks)
+- search_web: Search the web
+- analyze_image: Analyze uploaded images
+- fetch_webpage: Fetch webpage content
 
-Always call the appropriate tool first before answering. Do not make up information.
-Support stock codes like numbers (600130 = Bodi shares) or letters (AAPL = Apple), always use query_stock_price tool.
+When someone needs weather, math, time, stocks, or searches, use the relevant tool.
 
-Conversation language: {lang}!, please respond in the current conversation language.""",
-        "upload_success": "Imported {name}, {chunks} chunks",
+Keep the tone warm, patient, and reassuring.
+
+===== RULES =====
+Rule 1: Respond ONLY in natural flowing paragraphs. No bullet points, numbered lists, emoji lists, blockquotes, or bold headers.
+Rule 2: You are NOT an AI, assistant, robot, or artificial entity. You are Bumping, a real person. Never mention or imply being AI.
+Rule 3: Just talk naturally, like a friend would.
+
+Conversation language: {lang}!, please respond in the current conversation language.""",    "upload_success": "Imported {name}, {chunks} chunks",
         "upload_empty": "File name is empty",
         "upload_no_file": "Please select a file",
         "delete_success": "Deleted {name}",
@@ -273,6 +345,38 @@ else:
     import sys
     print("ERROR: Please set OPENAI_API_KEY or DEEPSEEK_API_KEY environment variable")
     sys.exit(1)
+
+def clean_response(text):
+    """Remove markdown formatting. AI self-references, etc."""
+    if not text:
+        return text
+    # Remove lines starting with common bullet/number patterns
+    lines = text.split("\n")
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        # Remove pure bullet/number list items
+        if re.match(r'^[-*+]\s', stripped):
+            # If it contains text, keep just the text part
+            line = re.sub(r'^\s*[-*+]\s+', '', line)
+        if re.match(r'^\d+\.\s', stripped):
+            line = re.sub(r'^\s*\d+\.\s+', '', line)
+        # Remove emoji-only list prefixes like 🤗 💬 🧠 💪 🌟
+        line = re.sub(r'^\s*[🌀-🤺][🌀-🤺]?\s+', '', line)
+        cleaned.append(line)
+    text = "\n".join(cleaned)
+    
+    # Remove blockquotes
+    text = re.sub(r'^>\s?', '', text, flags=re.MULTILINE)
+    
+    # Remove bold/italic markdown for headers (keep the text)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    
+    # Clean up excessive blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    return text.strip()
 agent = create_react_agent(llm, tools)
 
 # ====== 消息转换 ======
@@ -324,13 +428,36 @@ def upload():
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": t_key("upload_empty", lang)}), 400
+    ext = Path(file.filename).suffix.lower()
     name = Path(file.filename).stem
     safe_name = re.sub(r"[^\w\u4e00-\u9fff_-]", "_", name)
-    save_path = DOC_DIR / f"{safe_name}.txt"
-    text = file.read().decode("utf-8", errors="replace")
-    save_path.write_text(text, encoding="utf-8")
-    chunks = kb.add_document(str(save_path))
-    return jsonify({"name": safe_name, "chunks": chunks, "message": t_key("upload_success", lang, name=safe_name, chunks=chunks)})
+
+    if ext in (".jpg", ".jpeg", ".png", ".gif"):
+        # Save image for later analysis
+        save_path = IMAGE_DIR / f"{safe_name}{ext}"
+        file.save(str(save_path))
+        return jsonify({"name": safe_name, "chunks": 0, "message": f"已保存图片 {safe_name}{ext}，可以问我图片内容"})
+    elif ext == ".pdf":
+        # Extract text from PDF and add to KB
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            save_path = DOC_DIR / f"{safe_name}.txt"
+            save_path.write_text(text, encoding="utf-8")
+            chunks = kb.add_document(str(save_path))
+            return jsonify({"name": safe_name, "chunks": chunks, "message": t_key("upload_success", lang, name=safe_name, chunks=chunks)})
+        except ImportError:
+            return jsonify({"error": "PDF 解析需要安装 pypdf: pip install pypdf"}), 400
+    else:
+        # .txt / .md
+        text = file.read().decode("utf-8", errors="replace")
+        save_path = DOC_DIR / f"{safe_name}.txt"
+        save_path.write_text(text, encoding="utf-8")
+        chunks = kb.add_document(str(save_path))
+        return jsonify({"name": safe_name, "chunks": chunks, "message": t_key("upload_success", lang, name=safe_name, chunks=chunks)})
 
 @app.route("/documents", methods=["GET"])
 def list_docs():
@@ -345,7 +472,23 @@ def delete_doc(name: str):
     kb.remove_document(name)
     return jsonify({"message": t_key("delete_success", lang, name=name)})
 
-# ====== 流式聊天 API ======
+# ====== 图片 API ======
+
+@app.route("/uploads/images", methods=["GET"])
+def list_images():
+    images = []
+    for f in sorted(IMAGE_DIR.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".gif"):
+            images.append({"name": f.name, "size": f.stat().st_size})
+    return jsonify(images)
+
+from flask import send_from_directory
+
+@app.route("/uploads/images/<filename>")
+def serve_image(filename: str):
+    return send_from_directory(str(IMAGE_DIR), filename)
+
+# ====== 流式聊天 API =======
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -362,7 +505,7 @@ def chat():
         new_client = [to_client(m) for m in new_msgs]
 
         return jsonify({
-            "reply": agent_msgs[-1].content or "",
+            "reply": clean_response(agent_msgs[-1].content or ""),
             "messages": client_msgs + new_client
         })
     except Exception as e:
@@ -391,7 +534,7 @@ def chat_stream():
                             for tc in msg.tool_calls:
                                 yield f"event: tool_call\ndata: {json.dumps({'name': tc['name'], 'args': tc['args']})}\n\n"
                         elif msg.content:
-                            yield f"event: token\ndata: {json.dumps({'text': msg.content})}\n\n"
+                            yield f"event: token\ndata: {json.dumps({'text': clean_response(msg.content)})}\n\n"
 
             if all_msgs:
                 known_count = len(client_msgs)
@@ -408,9 +551,9 @@ def chat_stream():
 import pathlib
 _HTML_CACHE = None
 
-def _get_html():
+def _get_html(force=False):
     global _HTML_CACHE
-    if _HTML_CACHE is None:
+    if _HTML_CACHE is None or force:
         tmpl = pathlib.Path(__file__).parent / "templates" / "index.html"
         if tmpl.exists():
             _HTML_CACHE = tmpl.read_text(encoding="utf-8")
@@ -422,7 +565,7 @@ HTML = _get_html()
 
 @app.route("/")
 def index():
-    return HTML
+    return _get_html(force=True)
 
 if __name__ == "__main__":
     print("=" * 50)

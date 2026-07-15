@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -20,6 +20,11 @@
   .doc-name { color: #1d1d1f; font-size: 13px; font-weight: 500; }
   .doc-meta { color: #86868b; font-size: 11px; margin-top: 3px; }
   .doc-del { color: #ff453a; font-size: 11px; cursor: pointer; float: right; }
+  .img-strip { display: flex; gap: 3px; overflow-x: auto; padding: 2px 0; max-height: 52px; }
+  .img-strip::-webkit-scrollbar { height: 3px; }
+  .img-strip::-webkit-scrollbar-thumb { background: #d2d2d7; border-radius: 2px; }
+  .img-thumb { height: 44px; width: auto; border-radius: 3px; cursor: pointer; border: 1px solid #e5e5e7; flex-shrink: 0; }
+  .img-thumb:hover { border-color: #1d1d1f; }
   .empty-docs { color: #86868b; font-size: 12px; text-align: center; padding: 30px 0; }
   .chat-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #ffffff; }
   .header { padding: 16px 24px; color: #1d1d1f; font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e5e5e7; background: #fafafa; }
@@ -55,31 +60,35 @@
 <body>
 <div class="sidebar">
   <div id="newChatBtn" onclick="nc()" style="padding:10px 16px;margin:12px 12px 4px;background:#1d1d1f;color:white;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;text-align:center">+ 新对话</div>
-  <div class="sidebar-header" id="docHeader">Bumping <span id="clearBtn" onclick="clr()" style="font-size:11px;color:#86868b;cursor:pointer;float:right;font-weight:400">清空</span></div>
+
+  <div class="sidebar-header" id="oldChatHeader" style="border-top:1px solid #e5e5e7;padding-top:12px;">旧对话</div>
+  <div class="sidebar-content" id="oldChats" style="max-height:200px;overflow-y:auto;">
+    <div class="empty-docs" id="emptyOldChats">暂无旧对话</div>
+  </div>
+
+  <div class="sidebar-header" style="border-top:1px solid #e5e5e7;margin-top:8px;padding-top:12px;" id="docHeader">Bumping <span id="clearBtn" onclick="clr()" style="font-size:11px;color:#86868b;cursor:pointer;float:right;font-weight:400">清空</span></div>
   <div class="sidebar-content" id="docList">
     <div class="empty-docs" id="emptyDocs">还没有文档<br>上传文件即可搜索</div>
   </div>
-
-  <div class="sidebar-header" style="border-top:1px solid #e5e5e7;margin-top:8px;padding-top:12px;" id="oldChatHeader">旧对话</div>
-  <div class="sidebar-content" id="oldChats">
-    <div class="empty-docs" id="emptyOldChats">暂无旧对话</div>
+  <div id="imageList" style="max-height:44px;overflow:hidden;padding:0 16px 4px;">
+    <div class="empty-docs" style="font-size:10px;padding:4px 0;color:#86868b;">暂无图片</div>
   </div>
-  <div class="upload-area">
-    <input type="file" id="fileInput" accept=".txt,.md" style="display:none" onchange="uploadFile()">
+<div class="upload-area">
+    <input type="file" id="fileInput" accept=".txt,.md,.pdf,.jpg,.jpeg,.png,.gif" style="display:none" onchange="uploadFile()">
     <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">+ 上传文件</button>
   </div>
 </div>
 <div class="chat-container">
   <div class="header">
     <span class="header-title" id="headerTitle">助手</span>
-    <span class="header-tools" id="headerTools">7 个工具</span>
+    <span class="header-tools" id="headerTools">9 个工具</span>
     <div class="header-lang">
       <button class="lang-btn" id="langZh" onclick="switchLang('zh')">中文</button>
       <button class="lang-btn" id="langEn" onclick="switchLang('en')">EN</button>
     </div>
   </div>
   <div class="messages" id="messages">
-    <div class="msg assistant" id="welcomeMsg">你好！我是 Bumping！<br><br>📫 左侧可以上传文档（.txt / .md），之后问我文档里的内容<br>🔍 也可以查天气、定位、计算、时间<br><br>试试：上传一篇笔记，然后问\"笔记里提到了什么？\"</div>
+    <div class="msg assistant" id="welcomeMsg">你好！我是 Bumping！<br><br>📫 左侧可以上传文档和 PDF<br>🖼️ 上传图片后我可以分析内容<br>🔍 也可以查天气、定位、计算、股票<br><br>试试：上传一篇笔记，然后问\"笔记里提到了什么？\"</div>
   </div>
   <div class="input-bar">
     <input type="text" id="input" placeholder="输入你的问题..." onkeydown="if(event.key==='Enter') send()">
@@ -99,7 +108,7 @@ const LANG = {
     emptyOldChats: "暂无旧对话",
     uploadBtn: "+ 上传文件",
     headerTitle: "Bumping Agent",
-    tools: "7 个工具",
+    tools: "9 个工具",
     welcome: "你好！我是 Bumping！\n\n📫 左侧可以上传文档（.txt / .md），之后问我文档里的内容\n🔍 也可以查天气、定位、计算、时间\n\n试试：上传一篇笔记，然后问\"笔记里提到了什么？\"",
     inputPlaceholder: "输入你的问题...",
     sendBtn: "发送",
@@ -109,6 +118,7 @@ const LANG = {
     toolCall: "调用",
     confirmClear: "确认清空对话？",
     newChatWelcome: "你好！我是 Bumping，我可以查天气、搜股票、定位、计算、检索文档、搜索网页。",
+    emptyImages: "暂无图片",
   },
   en: {
     title: "Bumping Agent",
@@ -120,7 +130,7 @@ const LANG = {
     emptyOldChats: "No history",
     uploadBtn: "+ Upload File",
     headerTitle: "Bumping Agent",
-    tools: "7 tools",
+    tools: "9 tools",
     welcome: "Hello!\n\n📫 Upload documents (.txt / .md) on the left, then ask me about them\n🔍 I can also check weather, location, calculations, time\n\nTry: upload a note and ask \"What does the note say?\"",
     inputPlaceholder: "Type your question...",
     sendBtn: "Send",
@@ -130,6 +140,7 @@ const LANG = {
     toolCall: "Call",
     confirmClear: "Clear all messages?",
     newChatWelcome: "Hello! I'm Bumping. I can check weather, stocks, location, calculations, search documents and the web.",
+    emptyImages: "No images",
   }
 };
 
@@ -139,29 +150,39 @@ function t(key) {
 }
 
 function applyLang() {
-  document.getElementById('pageTitle').textContent = t('title');
-  document.getElementById('newChatBtn').textContent = t('newChat');
-  document.getElementById('docHeader').innerHTML = t('docs') + ' <span id="clearBtn" onclick="clr()" style="font-size:11px;color:#86868b;cursor:pointer;float:right;font-weight:400">' + t('clear') + '</span>';
-  document.getElementById('emptyDocs').innerHTML = t('emptyDocs');
-  document.getElementById('oldChatHeader').textContent = t('oldChats');
-  document.getElementById('emptyOldChats').textContent = t('emptyOldChats');
-  document.getElementById('uploadBtn').textContent = t('uploadBtn');
-  document.getElementById('headerTitle').textContent = t('headerTitle');
-  document.getElementById('headerTools').textContent = t('tools');
-  document.getElementById('input').placeholder = t('inputPlaceholder');
-  document.getElementById('sendBtn').textContent = t('sendBtn');
-  // welcome message - only update if no messages yet
-  var msgs = document.getElementById('messages');
-  if (msgs.children.length === 1 && msgs.children[0].id === 'welcomeMsg') {
-    document.getElementById('welcomeMsg').textContent = t('welcome');
-  }
-  // lang buttons
-  document.getElementById('langZh').className = 'lang-btn' + (currentLang === 'zh' ? ' active' : '');
-  document.getElementById('langEn').className = 'lang-btn' + (currentLang === 'en' ? ' active' : '');
-  document.documentElement.lang = currentLang;
-}
+  function E(x) { return document.getElementById(x); }
+  function S(x, v) { var el = E(x); if (el) el.textContent = v; }
+  function H(x, v) { var el = E(x); if (el) el.innerHTML = v; }
 
-function switchLang(lang) {
+  S("pageTitle", t("title"));
+  S("newChatBtn", t("newChat"));
+  H("docHeader", t("docs") + ' <span id="clearBtn" onclick="clr()" style="font-size:11px;color:#86868b;cursor:pointer;float:right;font-weight:400">' + t("clear") + "</span>");
+  H("emptyDocs", t("emptyDocs"));
+  S("oldChatHeader", t("oldChats"));
+  H("emptyOldChats", t("emptyOldChats"));
+  S("uploadBtn", t("uploadBtn"));
+  S("headerTitle", t("headerTitle"));
+  S("headerTools", t("tools"));
+  var inp = E("input"); if (inp) inp.placeholder = t("inputPlaceholder");
+  S("sendBtn", t("sendBtn"));
+
+  // Image list
+  var imgList = E("imageList");
+  if (imgList && (!imgList.children.length || (imgList.children.length === 1 && imgList.children[0].className === "empty-docs"))) {
+    H("imageList", '<div class="empty-docs" style="font-size:11px;padding:8px 0;">' + t("emptyImages") + "</div>");
+  }
+
+  // Welcome message
+  var msgs = E("messages");
+  if (msgs && msgs.children.length === 1 && msgs.children[0].id === "welcomeMsg") {
+    S("welcomeMsg", t("welcome"));
+  }
+
+  // Lang buttons
+  var zh = E("langZh"); if (zh) zh.className = "lang-btn" + (currentLang === "zh" ? " active" : "");
+  var en = E("langEn"); if (en) en.className = "lang-btn" + (currentLang === "en" ? " active" : "");
+  document.documentElement.lang = currentLang;
+}function switchLang(lang) {
   if (lang === currentLang) return;
   currentLang = lang;
   try { localStorage.setItem('chat_lang', lang); } catch(e) {}
@@ -201,6 +222,26 @@ function ld() {
   } catch(e) {}
 }
 
+// ====== 图片列表 ======
+async function loadImages() {
+  const resp = await fetch("/uploads/images");
+  const imgs = await resp.json();
+  const el = document.getElementById("imageList");
+  if (imgs.length === 0) {
+    el.innerHTML = "<div class='empty-docs' style='font-size:11px;padding:8px 0;'>暂无图片</div>";
+    return;
+  }
+  el.innerHTML = "<div class='img-strip'>" + imgs.map(function(f) {
+    return "<img class='img-thumb' src='/uploads/images/" + f.name + "?t=" + Date.now() + "' title='" + f.name + "' onclick='addMessage(\"分析这张图片: " + f.name + "\", \"user\"); sendImage(\"" + f.name + "\")'>";
+  }).join("") + "</div>";
+}
+
+function sendImage(filename) {
+  var input = document.getElementById("input");
+  input.value = "分析这张图片: " + filename;
+  send();
+}
+
 // ====== 文档列表 ======
 async function loadDocs() {
   const resp = await fetch('/documents' + '?lang=' + currentLang);
@@ -230,6 +271,7 @@ async function uploadFile() {
   const resp = await fetch('/upload', { method: 'POST', body: form });
   const data = await resp.json();
   loadDocs();
+  if (file.type && file.type.startsWith('image/')) { loadImages(); }
   addMessage(data.message || data.error, data.error ? 'error' : 'tool-result');
   input.value = '';
 }
@@ -278,11 +320,15 @@ async function send() {
         }
       }
       allMessages = data.messages; sv();
-      // Auto-save to old chats
+      // Auto-save to old chats (reuse same key per conversation)
       try {
-        var chatKey = "chat_" + Date.now();
-        localStorage.setItem(chatKey, JSON.stringify(allMessages));
-        refreshOldChats();
+        if (allMessages.length > 0) {
+          if (!currentChatId) {
+            currentChatId = "chat_" + Date.now();
+          }
+          localStorage.setItem(currentChatId, JSON.stringify(allMessages));
+          refreshOldChats();
+        }
       } catch(e) {
         console.log("Auto-save error:", e);
       }
@@ -325,8 +371,10 @@ function showMessage(m) {
 
 function nc() {
   if (allMessages.length > 0) {
-    localStorage.setItem("chat_" + Date.now(), JSON.stringify(allMessages));
+    currentChatId = "chat_" + Date.now();
+    localStorage.setItem(currentChatId, JSON.stringify(allMessages));
   }
+  currentChatId = null;
   allMessages = [];
   localStorage.removeItem("chat");
   document.getElementById("messages").innerHTML = '<div class="msg assistant" id="welcomeMsg">' + t('newChatWelcome') + '</div>';
@@ -334,6 +382,14 @@ function nc() {
 }
 
 function restoreChat(key) {
+  // Save current chat before switching
+  if (allMessages.length > 0) {
+    if (!currentChatId) {
+      currentChatId = "chat_" + Date.now();
+    }
+    localStorage.setItem(currentChatId, JSON.stringify(allMessages));
+  }
+  currentChatId = key;
   var data = JSON.parse(localStorage.getItem(key));
   if (data) {
     allMessages = data;
@@ -366,8 +422,8 @@ function refreshOldChats() {
     el.innerHTML = "<div class='empty-docs' id='emptyOldChats'>" + t('emptyOldChats') + "</div>";
     return;
   }
-  keys.sort().reverse();
-  var html = keys.slice(-10).reverse().map(function(key) {
+  keys.sort().reverse();  // Newest first
+  var html = keys.slice(0, 20).map(function(key) {
     try {
       var ts = new Date(parseInt(key.split("_")[1]));
       var timeStr = ts.toLocaleString(currentLang === 'zh' ? "zh-CN" : "en-US");

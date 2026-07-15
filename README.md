@@ -1,18 +1,23 @@
 # Bumping Agent
 
-A versatile AI assistant powered by LangGraph + DeepSeek, with a built-in RAG knowledge base, web search, stock quotes, weather, and language switching — all in a clean web UI.
+A warm, emotional AI companion — powered by LangGraph + DeepSeek, with built-in RAG knowledge base, web search, stock quotes, weather, image analysis, and language switching. All wrapped in a clean web UI.
+
+Bumping speaks like a caring older sister (知心姐姐): patient, warm, and reassuring. No robotic lists, no "I'm an AI" disclaimers — just natural, flowing conversation.
 
 ## Features
 
-| Tool | Description |
-|------|-------------|
-| Weather | Real-time weather for any city (via wttr.in) |
-| Location | IP-based geolocation |
-| Calculator | Math expression evaluation |
-| Time | Current date and time |
-| Document RAG | Upload .txt/.md files and ask questions |
-| Stock Price | A-shares (China) and US stocks |
-| Web Search | Bing search integration |
+| Feature | Description |
+|---------|-------------|
+| ❤️ **Emotional Chat** | Warm, human-like conversation. Never bullet points or robotic replies |
+| 🌤 **Weather** | Real-time weather for any city (via wttr.in) |
+| 📍 **Location** | IP-based geolocation |
+| 🧮 **Calculator** | Math expression evaluation |
+| 🕐 **Time** | Current date and time |
+| 📄 **Document RAG** | Upload .txt/.md/.pdf files and ask questions |
+| 📈 **Stock Price** | A-shares (China) and US stocks |
+| 🌐 **Web Search** | Bing search integration |
+| 🖼 **Image Analysis** | Analyze uploaded images (via GPT-4o-mini vision) |
+| 📰 **Webpage Fetch** | Extract and summarize webpage content |
 
 ## Quick Start
 
@@ -36,10 +41,23 @@ python chat_app.py
 
 - **Sidebar (left):** Upload documents, view chat history, start a new conversation
 - **Header:** Language switcher (中文 / EN) — the assistant responds in the selected language
-- **Chat input:** Type your question, the assistant uses tools to answer
-- **Files:** Upload .txt or .md files, then ask questions about their content
+- **Chat input:** Type your question — Bumping responds warmly like a friend
+- **Files:** Upload .txt/.md/.pdf files, then ask questions about their content
+- **Images:** Upload images and ask Bumping to describe them
 
-The conversation history auto-saves. Click "New Chat" to start a fresh session — old chats appear in the sidebar.
+The conversation history auto-saves. Click "New Chat" to start a fresh session — old chats appear at the top of the sidebar, newest first.
+
+## Personality
+
+Bumping is designed to feel like a real person, not a robot:
+
+- **Warm and patient** — like a kind older sister who listens
+- **No bullet points** — all replies are natural flowing paragraphs
+- **No AI disclaimers** — never says "as an AI" or "I'm a robot"
+- **Gentle tone** — uses casual language, comfort when needed
+- **Language-aware** — responds in the language you choose (Chinese / English)
+
+Post-processing filters ensure the output stays clean and human-like, regardless of the underlying model's habits.
 
 ## Configuration
 
@@ -51,27 +69,29 @@ DEEPSEEK_API_KEY=sk-your-key-here
 
 The app auto-detects which key you set. If both are set, OpenAI takes priority.
 
-- **Set `DEEPSEEK_API_KEY`** → uses DeepSeek (`deepseek-chat`, cheaper)
-- **Set `OPENAI_API_KEY`** → uses OpenAI (`gpt-4o-mini`)
-- **Set both** → OpenAI is used
+| Variable | Model | Notes |
+|----------|-------|-------|
+| `DEEPSEEK_API_KEY` | `deepseek-chat` | Cheaper, recommended for daily use |
+| `OPENAI_API_KEY` | `gpt-4o-mini` | Supports vision (image analysis) |
 
 ## Architecture
 
 ```
-chat_app.py            Flask server + LangGraph agent + RAG
-templates/index.html   Web UI (HTML, CSS, JavaScript)
-knowledge_docs/        Uploaded documents
-knowledge_index/       TF-IDF index cache
+chat_app.py            Flask server + LangGraph agent + RAG + post-processing
+templates/index.html   Web UI (HTML, CSS, vanilla JavaScript)
+knowledge_docs/        Uploaded documents for RAG
+knowledge_index/       TF-IDF index cache (auto-generated)
+uploads/images/        Uploaded images for vision analysis
 ```
 
-The agent uses LangGraph's `create_react_agent` with 7 tools.
-Document retrieval uses TF-IDF vectorization (scikit-learn).
+The agent uses LangGraph's `create_react_agent` with 10 tools (including image analysis and webpage fetch).
+Document retrieval uses TF-IDF vectorization (scikit-learn) over 500-character chunks.
 
 ## Tech Stack
 
 - **Backend:** Python, Flask, LangGraph, LangChain, scikit-learn, DeepSeek API
 - **Frontend:** Vanilla JavaScript, CSS
-- **Storage:** Local file system for documents, browser localStorage for conversations
+- **Storage:** Browser localStorage for conversations, local filesystem for documents
 
 ## License
 
