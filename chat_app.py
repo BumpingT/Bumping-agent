@@ -263,8 +263,16 @@ def get_system_prompt(lang="zh"):
     return LANG_STRINGS.get(lang, LANG_STRINGS["zh"])["system_prompt"].format(lang=lang)
 
 # ====== 初始化 Agent ======
-api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
-llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.3)
+if os.environ.get("OPENAI_API_KEY"):
+    api_key = os.environ["OPENAI_API_KEY"]
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0.3)
+elif os.environ.get("DEEPSEEK_API_KEY"):
+    api_key = os.environ["DEEPSEEK_API_KEY"]
+    llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.3)
+else:
+    import sys
+    print("ERROR: Please set OPENAI_API_KEY or DEEPSEEK_API_KEY environment variable")
+    sys.exit(1)
 agent = create_react_agent(llm, tools)
 
 # ====== 消息转换 ======

@@ -43,13 +43,17 @@ The conversation history auto-saves. Click "New Chat" to start a fresh session �
 
 ## Configuration
 
-Copy `.env.example` to `.env` and set your API key:
+Copy `.env.example` to `.env` and set your API key (only need one):
 
 ```
 DEEPSEEK_API_KEY=sk-your-key-here
 ```
 
-The app supports both DeepSeek (`deepseek-chat`) and OpenAI models.
+The app auto-detects which key you set. If both are set, OpenAI takes priority.
+
+- **Set `DEEPSEEK_API_KEY`** → uses DeepSeek (`deepseek-chat`, cheaper)
+- **Set `OPENAI_API_KEY`** → uses OpenAI (`gpt-4o-mini`)
+- **Set both** → OpenAI is used
 
 ## Architecture
 
