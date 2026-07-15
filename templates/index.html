@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="pageTitle">助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, Inter, Segoe UI, sans-serif; background: #f5f5f7; height: 100vh; display: flex; }
+  .sidebar { width: 240px; background: #ffffff; display: flex; flex-direction: column; border-right: 1px solid #e5e5e7; }
+  .sidebar-header { padding: 20px 18px; color: #1d1d1f; font-weight: 600; font-size: 14px; border-bottom: 1px solid #e5e5e7; }
+  .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
+  .upload-area { padding: 12px 16px; border-top: 1px solid #e5e5e7; }
+  .upload-btn { width: 100%; padding: 9px; background: #1d1d1f; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .upload-btn:hover { opacity: 0.8; }
+  .doc-item { padding: 10px 12px; background: #f5f5f7; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e5e5e7; }
+  .doc-name { color: #1d1d1f; font-size: 13px; font-weight: 500; }
+  .doc-meta { color: #86868b; font-size: 11px; margin-top: 3px; }
+  .doc-del { color: #ff453a; font-size: 11px; cursor: pointer; float: right; }
+  .empty-docs { color: #86868b; font-size: 12px; text-align: center; padding: 30px 0; }
+  .chat-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #ffffff; }
+  .header { padding: 16px 24px; color: #1d1d1f; font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e5e5e7; background: #fafafa; }
+  .header-title { margin-right: auto; }
+  .header-lang { display: flex; align-items: center; gap: 4px; }
+  .lang-btn { background: transparent; border: 1px solid #d2d2d7; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: #86868b; transition: all 0.15s; }
+  .lang-btn.active { background: #1d1d1f; color: white; border-color: #1d1d1f; }
+  .lang-btn:hover:not(.active) { border-color: #1d1d1f; color: #1d1d1f; }
+  .header-tools { background: #e5e5e7; font-size: 11px; padding: 2px 10px; border-radius: 12px; color: #1d1d1f; font-weight: 400; }
+  .messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 80%; padding: 10px 16px; border-radius: 12px; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .user { background: #1d1d1f; color: white; align-self: flex-end; }
+  .assistant { background: #f5f5f7; color: #1d1d1f; align-self: flex-start; }
+  .tool-call { color: #86868b; font-size: 12px; align-self: flex-start; padding: 6px 14px; font-family: SF Mono, Cascadia Code, monospace; background: #f5f5f7; border-radius: 6px; }
+  .tool-result { color: #30b94c; font-size: 12px; align-self: flex-start; padding: 6px 14px; font-family: SF Mono, Cascadia Code, monospace; background: #f5f5f7; border-radius: 6px; }
+  .streaming { color: #1d1d1f; align-self: flex-start; padding: 10px 16px; font-size: 14px; line-height: 1.6; border-right: 2px solid #1d1d1f; animation: blink 0.8s infinite; }
+  @keyframes blink { 50% { border-right-color: transparent; } }
+  .input-bar { display: flex; padding: 14px 20px; border-top: 1px solid #e5e5e7; gap: 8px; background: #fafafa; }
+  .input-bar input { flex: 1; padding: 10px 14px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px; outline: none; }
+  .input-bar input:focus { border-color: #1d1d1f; }
+  .input-bar button { padding: 10px 20px; background: #1d1d1f; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .input-bar button:hover { opacity: 0.8; }
+  .input-bar button:disabled { background: #d2d2d7; color: #86868b; cursor: not-allowed; }
+  .error { color: #ff453a; background: #fff2f0; align-self: flex-start; }
+  .messages::-webkit-scrollbar { width: 6px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: #d2d2d7; border-radius: 3px; }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: #d2d2d7; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div id="newChatBtn" onclick="nc()" style="padding:10px 16px;margin:12px 12px 4px;background:#1d1d1f;color:white;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;text-align:center">+ 新对话</div>
+  <div class="sidebar-header" id="docHeader">Bumping <span id="clearBtn" onclick="clr()" style="font-size:11px;color:#86868b;cursor:pointer;float:right;font-weight:400">清空</span></div>
+  <div class="sidebar-content" id="docList">
+    <div class="empty-docs" id="emptyDocs">还没有文档<br>上传文件即可搜索</div>
+  </div>
+
+  <div class="sidebar-header" style="border-top:1px solid #e5e5e7;margin-top:8px;padding-top:12px;" id="oldChatHeader">旧对话</div>
+  <div class="sidebar-content" id="oldChats">
+    <div class="empty-docs" id="emptyOldChats">暂无旧对话</div>
+  </div>
+  <div class="upload-area">
+    <input type="file" id="fileInput" accept=".txt,.md" style="display:none" onchange="uploadFile()">
+    <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">+ 上传文件</button>
+  </div>
+</div>
+<div class="chat-container">
+  <div class="header">
+    <span class="header-title" id="headerTitle">助手</span>
+    <span class="header-tools" id="headerTools">7 个工具</span>
+    <div class="header-lang">
+      <button class="lang-btn" id="langZh" onclick="switchLang('zh')">中文</button>
+      <button class="lang-btn" id="langEn" onclick="switchLang('en')">EN</button>
+    </div>
+  </div>
+  <div class="messages" id="messages">
+    <div class="msg assistant" id="welcomeMsg">你好！我是 Bumping！<br><br>📫 左侧可以上传文档（.txt / .md），之后问我文档里的内容<br>🔍 也可以查天气、定位、计算、时间<br><br>试试：上传一篇笔记，然后问\"笔记里提到了什么？\"</div>
+  </div>
+  <div class="input-bar">
+    <input type="text" id="input" placeholder="输入你的问题..." onkeydown="if(event.key==='Enter') send()">
+    <button id="sendBtn" onclick="send()">发送</button>
+  </div>
+</div>
+<script>
+// ====== 多语言翻译 ======
+const LANG = {
+  zh: {
+    title: "Bumping Agent",
+    newChat: "+ 新对话",
+    docs: "文档",
+    clear: "清空",
+    emptyDocs: "还没有文档<br>上传文件即可搜索",
+    oldChats: "旧对话",
+    emptyOldChats: "暂无旧对话",
+    uploadBtn: "+ 上传文件",
+    headerTitle: "Bumping Agent",
+    tools: "7 个工具",
+    welcome: "你好！我是 Bumping！\n\n📫 左侧可以上传文档（.txt / .md），之后问我文档里的内容\n🔍 也可以查天气、定位、计算、时间\n\n试试：上传一篇笔记，然后问\"笔记里提到了什么？\"",
+    inputPlaceholder: "输入你的问题...",
+    sendBtn: "发送",
+    delete: "删除",
+    error: "错误",
+    networkError: "网络错误",
+    toolCall: "调用",
+    confirmClear: "确认清空对话？",
+    newChatWelcome: "你好！我是 Bumping，我可以查天气、搜股票、定位、计算、检索文档、搜索网页。",
+  },
+  en: {
+    title: "Bumping Agent",
+    newChat: "+ New Chat",
+    docs: "Documents",
+    clear: "Clear",
+    emptyDocs: "No documents yet<br>Upload a file to search",
+    oldChats: "History",
+    emptyOldChats: "No history",
+    uploadBtn: "+ Upload File",
+    headerTitle: "Bumping Agent",
+    tools: "7 tools",
+    welcome: "Hello!\n\n📫 Upload documents (.txt / .md) on the left, then ask me about them\n🔍 I can also check weather, location, calculations, time\n\nTry: upload a note and ask \"What does the note say?\"",
+    inputPlaceholder: "Type your question...",
+    sendBtn: "Send",
+    delete: "Delete",
+    error: "Error",
+    networkError: "Network error",
+    toolCall: "Call",
+    confirmClear: "Clear all messages?",
+    newChatWelcome: "Hello! I'm Bumping. I can check weather, stocks, location, calculations, search documents and the web.",
+  }
+};
+
+let currentLang = 'zh';
+function t(key) {
+  return (LANG[currentLang] && LANG[currentLang][key]) || (LANG.zh[key]) || key;
+}
+
+function applyLang() {
+  document.getElementById('pageTitle').textContent = t('title');
+  document.getElementById('newChatBtn').textContent = t('newChat');
+  document.getElementById('docHeader').innerHTML = t('docs') + ' <span id="clearBtn" onclick="clr()" style="font-size:11px;color:#86868b;cursor:pointer;float:right;font-weight:400">' + t('clear') + '</span>';
+  document.getElementById('emptyDocs').innerHTML = t('emptyDocs');
+  document.getElementById('oldChatHeader').textContent = t('oldChats');
+  document.getElementById('emptyOldChats').textContent = t('emptyOldChats');
+  document.getElementById('uploadBtn').textContent = t('uploadBtn');
+  document.getElementById('headerTitle').textContent = t('headerTitle');
+  document.getElementById('headerTools').textContent = t('tools');
+  document.getElementById('input').placeholder = t('inputPlaceholder');
+  document.getElementById('sendBtn').textContent = t('sendBtn');
+  // welcome message - only update if no messages yet
+  var msgs = document.getElementById('messages');
+  if (msgs.children.length === 1 && msgs.children[0].id === 'welcomeMsg') {
+    document.getElementById('welcomeMsg').textContent = t('welcome');
+  }
+  // lang buttons
+  document.getElementById('langZh').className = 'lang-btn' + (currentLang === 'zh' ? ' active' : '');
+  document.getElementById('langEn').className = 'lang-btn' + (currentLang === 'en' ? ' active' : '');
+  document.documentElement.lang = currentLang;
+}
+
+function switchLang(lang) {
+  if (lang === currentLang) return;
+  currentLang = lang;
+  try { localStorage.setItem('chat_lang', lang); } catch(e) {}
+  applyLang();
+  refreshOldChats();
+}
+
+// Load saved language
+try {
+  var savedLang = localStorage.getItem('chat_lang');
+  if (savedLang === 'en' || savedLang === 'zh') { currentLang = savedLang; }
+} catch(e) {}
+
+let allMessages = [];
+let streamingDiv = null;
+
+function sv() { try { localStorage.setItem("chat", JSON.stringify(allMessages)); } catch(e) {} }
+function ld() {
+  try {
+    var s = localStorage.getItem("chat");
+    if (s) {
+      try { allMessages = JSON.parse(s); } catch(e) { allMessages = []; localStorage.removeItem("chat"); }
+      var msgs = document.getElementById("messages");
+      msgs.innerHTML = "";
+      allMessages.forEach(function(m) {
+        if (m.role === "user") {
+          var d = document.createElement("div");
+          d.className = "msg user";
+          d.textContent = m.content;
+          msgs.appendChild(d);
+        } else {
+          showMessage(m);
+        }
+      });
+    }
+    refreshOldChats();
+  } catch(e) {}
+}
+
+// ====== 文档列表 ======
+async function loadDocs() {
+  const resp = await fetch('/documents' + '?lang=' + currentLang);
+  const docs = await resp.json();
+  const el = document.getElementById('docList');
+  if (docs.length === 0) {
+    el.innerHTML = '<div class="empty-docs" id="emptyDocs">' + t('emptyDocs') + '</div>';
+    return;
+  }
+  el.innerHTML = docs.map(function(d) {
+    return '<div class="doc-item">' +
+      '<span class="doc-name">' + d.name + '</span>' +
+      '<span class="doc-del" onclick="deleteDoc(\'' + d.name + '\')">' + t('delete') + '</span>' +
+      '<div class="doc-meta">' + (d.size/1024).toFixed(1) + ' KB · ' + d.updated + '</div>' +
+      '</div>';
+  }).join('');
+}
+loadDocs();
+
+async function uploadFile() {
+  const input = document.getElementById('fileInput');
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('lang', currentLang);
+  const resp = await fetch('/upload', { method: 'POST', body: form });
+  const data = await resp.json();
+  loadDocs();
+  addMessage(data.message || data.error, data.error ? 'error' : 'tool-result');
+  input.value = '';
+}
+
+async function deleteDoc(name) {
+  await fetch('/documents/' + encodeURIComponent(name) + '?lang=' + currentLang, { method: 'DELETE' });
+  loadDocs();
+}
+
+async function send() {
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  document.getElementById('sendBtn').disabled = true;
+
+  addMessage(text, 'user');
+  allMessages.push({ role: 'user', content: text });
+  sv();
+
+  // show streaming placeholder
+  var msgs = document.getElementById('messages');
+  streamingDiv = document.createElement('div');
+  streamingDiv.className = 'streaming';
+  streamingDiv.textContent = '';
+  msgs.appendChild(streamingDiv);
+
+  try {
+    const resp = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: allMessages, lang: currentLang })
+    });
+    const data = await resp.json();
+
+    if (streamingDiv) { streamingDiv.remove(); streamingDiv = null; }
+
+    if (data.error) {
+      addMessage(t('error') + ': ' + data.error, 'error');
+    } else {
+      for (var si = 0; si < data.messages.length; si++) {
+        var m = data.messages[si];
+        if (si >= allMessages.length) {
+          showMessage(m);
+        }
+      }
+      allMessages = data.messages; sv();
+      // Auto-save to old chats
+      try {
+        var chatKey = "chat_" + Date.now();
+        localStorage.setItem(chatKey, JSON.stringify(allMessages));
+        refreshOldChats();
+      } catch(e) {
+        console.log("Auto-save error:", e);
+      }
+    }
+  } catch (e) {
+    if (streamingDiv) { streamingDiv.remove(); streamingDiv = null; }
+    addMessage(t('networkError') + ': ' + e.message, 'error');
+  }
+
+  document.getElementById('sendBtn').disabled = false;
+}
+function showMessage(m) {
+  if (m.role === 'user') return;
+  var msgs = document.getElementById('messages');
+  if (m.role === 'assistant' && m.tool_calls) {
+    for (var i = 0; i < m.tool_calls.length; i++) {
+      var tc = m.tool_calls[i];
+      var d = document.createElement('div');
+      d.className = 'tool-call';
+      d.textContent = '🛠 ' + t('toolCall') + ': ' + tc.function.name + '(' + tc.function.arguments + ')';
+      msgs.appendChild(d);
+      d.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+  if (m.role === 'tool') {
+    var d = document.createElement('div');
+    d.className = 'tool-result';
+    d.textContent = '📳 ' + m.content.slice(0, 200);
+    msgs.appendChild(d);
+    d.scrollIntoView({ behavior: 'smooth' });
+  }
+  if (m.role === 'assistant' && m.content) {
+    var d = document.createElement('div');
+    d.className = 'msg assistant';
+    d.textContent = m.content;
+    msgs.appendChild(d);
+    d.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function nc() {
+  if (allMessages.length > 0) {
+    localStorage.setItem("chat_" + Date.now(), JSON.stringify(allMessages));
+  }
+  allMessages = [];
+  localStorage.removeItem("chat");
+  document.getElementById("messages").innerHTML = '<div class="msg assistant" id="welcomeMsg">' + t('newChatWelcome') + '</div>';
+  refreshOldChats();
+}
+
+function restoreChat(key) {
+  var data = JSON.parse(localStorage.getItem(key));
+  if (data) {
+    allMessages = data;
+    sv();
+    var msgs = document.getElementById("messages");
+    msgs.innerHTML = "";
+    allMessages.forEach(function(m) {
+      if (m.role === "user") {
+        var d = document.createElement("div");
+        d.className = "msg user";
+        d.textContent = m.content;
+        msgs.appendChild(d);
+      } else {
+        showMessage(m);
+      }
+    });
+  }
+}
+
+function refreshOldChats() {
+  var el = document.getElementById("oldChats");
+  if (!el) return;
+  var keys = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k.startsWith("chat_")) keys.push(k);
+  }
+  console.log("refreshOldChats found", keys.length, "keys:", keys);
+  if (keys.length === 0) {
+    el.innerHTML = "<div class='empty-docs' id='emptyOldChats'>" + t('emptyOldChats') + "</div>";
+    return;
+  }
+  keys.sort().reverse();
+  var html = keys.slice(-10).reverse().map(function(key) {
+    try {
+      var ts = new Date(parseInt(key.split("_")[1]));
+      var timeStr = ts.toLocaleString(currentLang === 'zh' ? "zh-CN" : "en-US");
+      var data = JSON.parse(localStorage.getItem(key));
+      var preview = (data && data.length > 0 ? data[0].content : "...");
+      return "<div class='doc-item' onclick='restoreChat(\"" + key + "\")' style='cursor:pointer'>" +
+        "<div class='doc-name'>" + (preview.length > 15 ? preview.slice(0, 15) : preview) + "</div>" +
+        "<div class='doc-meta'>" + timeStr + "</div></div>";
+    } catch(e) {
+      console.log("Skipping invalid key:", key, e);
+      localStorage.removeItem(key);
+      return "";
+    }
+  }).filter(function(x) { return x !== ""; }).join("");
+  el.innerHTML = html;
+}
+
+function clr() {
+  if (!confirm(t('confirmClear'))) return;
+  allMessages = [];
+  sv();
+  localStorage.removeItem("chat");
+  document.getElementById("messages").innerHTML = '<div class="msg assistant" id="welcomeMsg">' + t('newChatWelcome') + '</div>';
+}
+
+function addMessage(text, role) {
+  var div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  document.getElementById('messages').appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Save on page unload
+window.addEventListener('beforeunload', function() { try { sv(); } catch(e) {} });
+
+// Initialize language and load saved chats
+applyLang();
+ld();
+setTimeout(function() { try { refreshOldChats(); } catch(e) {} }, 500);
+</script>
+</body>
+</html>

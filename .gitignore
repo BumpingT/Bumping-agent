@@ -1,0 +1,9 @@
+__pycache__/
+.env
+.env.local
+*.pyc
+.DS_Store
+knowledge_docs/
+knowledge_index/
+my_langchain_demo/
+start_app.bat
