@@ -21,26 +21,28 @@ Bumping speaks like a caring older sister (知心姐姐): patient, warm, and rea
 
 ﻿## Quick Start
 
-> **No terminal setup needed.** Just run the app and enter your API key in the browser.
+[![Download ZIP](https://img.shields.io/badge/-%E4%B8%80%E9%94%AE%E4%B8%8B%E8%BD%BD%20ZIP-blue?style=for-the-badge&logo=github)](https://github.com/BumpingT/Bumping-agent/archive/refs/heads/main.zip)
+
+> **No terminal needed. Just run and enter your API key in the browser.**
 
 ```bash
-# 1. Install dependencies
+# 1. Download the ZIP and extract
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 2. Start the server
+# 3. Start the server
 python chat_app.py
 
-# 3. Open http://localhost:5000
-#    The app will ask you to enter your API key in the browser.
-#    No terminal config needed!
+# 4. Open http://localhost:5000
+#    The app will prompt you to enter your API key in the browser.
 ```
 
-Get a free API key from [DeepSeek](https://platform.deepseek.com/) (cheaper, recommended) or [OpenAI](https://platform.openai.com/).
+Get an API key: [DeepSeek](https://platform.deepseek.com/) (recommended, cheaper) or [OpenAI](https://platform.openai.com/)
 
 ```bash
 # Or set via environment variable (for server deployments):
-# Windows PowerShell:    $env:DEEPSEEK_API_KEY = "sk-your-key"
-# macOS / Linux:         export DEEPSEEK_API_KEY="sk-your-key"
+# Windows:    $env:DEEPSEEK_API_KEY = "sk-your-key"
+# macOS/Linux: export DEEPSEEK_API_KEY="sk-your-key"
 ```
 
 ## Usage
