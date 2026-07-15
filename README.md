@@ -21,15 +21,21 @@ Bumping speaks like a caring older sister (知心姐姐): patient, warm, and rea
 
 ## Quick Start
 
+> **You need an API key to use Bumping.** The app won't start without one.
+> Get a key from [DeepSeek](https://platform.deepseek.com/) (cheaper, recommended) or [OpenAI](https://platform.openai.com/).
+
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set your DeepSeek or OpenAI API key
+# 2. Set your API key (pick one)
 # Windows PowerShell:
-#   $env:DEEPSEEK_API_KEY = "sk-your-key"
+#   $env:DEEPSEEK_API_KEY = "sk-your-deepseek-key"
 # macOS / Linux:
-#   export DEEPSEEK_API_KEY="sk-your-key"
+#   export DEEPSEEK_API_KEY="sk-your-deepseek-key"
+
+# Or use OpenAI instead:
+#   $env:OPENAI_API_KEY = "sk-your-openai-key"
 
 # 3. Run
 python chat_app.py
