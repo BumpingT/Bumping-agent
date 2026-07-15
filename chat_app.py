@@ -335,16 +335,31 @@ def get_system_prompt(lang="zh"):
     return LANG_STRINGS.get(lang, LANG_STRINGS["zh"])["system_prompt"].format(lang=lang)
 
 # ====== 初始化 Agent ======
+agent = None
+
+def init_agent(provider, api_key):
+    """Initialize or reconfigure the agent with a given provider and API key."""
+    global agent
+    try:
+        if provider == "openai":
+            llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0.3)
+        elif provider == "deepseek":
+            llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.3)
+        else:
+            return False, "Unknown provider: " + provider
+        return True, "Agent initialized with " + provider
+    except Exception as e:
+        return False, str(e)
+
+# Try environment variables first (for server deployments)
 if os.environ.get("OPENAI_API_KEY"):
-    api_key = os.environ["OPENAI_API_KEY"]
-    llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0.3)
+    ok, msg = init_agent("openai", os.environ["OPENAI_API_KEY"])
+    print("  [env] " + msg)
 elif os.environ.get("DEEPSEEK_API_KEY"):
-    api_key = os.environ["DEEPSEEK_API_KEY"]
-    llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.3)
+    ok, msg = init_agent("deepseek", os.environ["DEEPSEEK_API_KEY"])
+    print("  [env] " + msg)
 else:
-    import sys
-    print("ERROR: Please set OPENAI_API_KEY or DEEPSEEK_API_KEY environment variable")
-    sys.exit(1)
+    print("  [setup] No API key found. Configure via web interface.")
 
 def clean_response(text):
     """Remove markdown formatting. AI self-references, etc."""
@@ -377,7 +392,6 @@ def clean_response(text):
     text = re.sub(r'\n{3,}', '\n\n', text)
     
     return text.strip()
-agent = create_react_agent(llm, tools)
 
 
 # ====== API Key 配置 ======
