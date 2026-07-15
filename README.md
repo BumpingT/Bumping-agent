@@ -35,7 +35,7 @@ pip install -r requirements.txt
 #   export DEEPSEEK_API_KEY="sk-your-deepseek-key"
 
 # Or use OpenAI instead:
-#   $env:OPENAI_API_KEY = "sk-your-openai-key"
+#   $env:OPENAI_API_KEY = "sk-proj-your-openai-key"
 
 # 3. Run
 python chat_app.py
