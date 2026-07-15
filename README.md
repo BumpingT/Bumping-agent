@@ -21,7 +21,7 @@ Bumping speaks like a caring older sister (知心姐姐): patient, warm, and rea
 
 ﻿## Quick Start
 
-[![Download ZIP](https://img.shields.io/badge/-%E4%B8%80%E9%94%AE%E4%B8%8B%E8%BD%BD%20ZIP-blue?style=for-the-badge&logo=github)](https://github.com/BumpingT/Bumping-agent/archive/refs/heads/main.zip)
+[![Download ZIP](https://img.shields.io/badge/Download%20ZIP-blue?style=for-the-badge&logo=github)](https://github.com/BumpingT/Bumping-agent/archive/refs/heads/main.zip)
 
 > **No terminal needed. Just run and enter your API key in the browser.**
 
