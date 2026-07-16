@@ -10,6 +10,9 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, Inter, Segoe UI, sans-serif; background: #f5f5f7; height: 100vh; display: flex; }
+  .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 200; background: #1d1d1f; color: white; padding: 10px 24px; border-radius: 10px; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: #ff453a; }
   .sidebar { width: 240px; background: #ffffff; display: flex; flex-direction: column; border-right: 1px solid #e5e5e7; }
   .sidebar-header { padding: 20px 18px; color: #1d1d1f; font-weight: 600; font-size: 14px; border-bottom: 1px solid #e5e5e7; }
   .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
@@ -48,6 +51,15 @@
   .input-bar button { padding: 10px 20px; background: #1d1d1f; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
   .input-bar button:hover { opacity: 0.8; }
   .input-bar button:disabled { background: #d2d2d7; color: #86868b; cursor: not-allowed; }
+  .toolbar { display: flex; padding: 6px 20px; gap: 6px; border-top: 1px solid #e5e5e7; background: #fafafa; }
+  .toolbar-btn { padding: 4px 12px; border: 1px solid #d2d2d7; border-radius: 14px; background: white; color: #86868b; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .toolbar-btn:hover { border-color: #1d1d1f; color: #1d1d1f; }
+  .toolbar-btn.active { background: #1d1d1f; color: white; border-color: #1d1d1f; }
+  .persona-select { padding: 3px 8px; border: 1px solid #d2d2d7; border-radius: 14px; font-size: 11px; background: white; color: #1d1d1f; cursor: pointer; outline: none; }
+  .persona-select:hover { border-color: #1d1d1f; }
+  .persona-upload-btn { padding: 3px 10px; border: 1px dashed #d2d2d7; border-radius: 14px; font-size: 11px; background: transparent; color: #86868b; cursor: pointer; }
+  .persona-del-btn { display: none; padding: 3px 8px; border: none; border-radius: 14px; font-size: 12px; background: transparent; color: #ff453a; cursor: pointer; }
+  .persona-del-btn:hover { background: #fef0ef; }
   .error { color: #ff453a; background: #fff2f0; align-self: flex-start; }
   .messages::-webkit-scrollbar { width: 6px; }
   .messages::-webkit-scrollbar-track { background: transparent; }
@@ -73,6 +85,7 @@
 </style>
 </head>
 <body>
+<div class="toast" id="toast"></div>
 <div class="sidebar">
   <div id="newChatBtn" onclick="nc()" style="padding:10px 16px;margin:12px 12px 4px;background:#1d1d1f;color:white;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;text-align:center">+ 新对话</div>
 
@@ -89,7 +102,7 @@
     <div class="empty-docs" style="font-size:10px;padding:4px 0;color:#86868b;">暂无图片</div>
   </div>
 <div class="upload-area">
-    <input type="file" id="fileInput" accept=".txt,.md,.pdf,.jpg,.jpeg,.png,.gif" style="display:none" onchange="uploadFile()">
+    <input type="file" id="fileInput" accept=".txt,.md,.pdf,.xlsx,.xls,.csv,.eml,.jpg,.jpeg,.png,.gif" style="display:none" onchange="uploadFile()">
     <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">+ 上传文件</button>
   </div>
 </div>
@@ -105,6 +118,17 @@
   </div>
   <div class="messages" id="messages">
     <div class="msg assistant" id="welcomeMsg">你好！我是 Bumping！<br><br>📫 左侧可以上传文档和 PDF<br>🖼️ 上传图片后我可以分析内容<br>🔍 也可以查天气、定位、计算、股票<br><br>试试：上传一篇笔记，然后问\"笔记里提到了什么？\"</div>
+  </div>
+  <div class="toolbar" id="toolbar">
+    <button class="toolbar-btn" id="modeThink" onclick="toggleMode('think')">深度摸鱼</button>
+    <button class="toolbar-btn" id="modeSearch" onclick="toggleMode('search')">联网搜索</button>
+    <span style="flex:1"></span>
+    <select class="persona-select" id="personaSelect" onchange="selectPersonality()">
+      <option value="" disabled selected>性格</option>
+    </select>
+    <button class="persona-upload-btn" id="personaUploadBtn" onclick="document.getElementById('personaFileInput').click()" title="上传聊天记录生成性格">+</button>
+    <button class="persona-del-btn" id="personaDelBtn" onclick="deletePersonality()" title="删除当前性格">✕</button>
+    <input type="file" id="personaFileInput" accept=".txt" style="display:none" onchange="generatePersonality(this)">
   </div>
   <div class="input-bar">
     <input type="text" id="input" placeholder="输入你的问题..." onkeydown="if(event.key==='Enter') send()">
@@ -136,7 +160,9 @@ const LANG = {
     newChatWelcome: "你好！我是 Bumping，我可以查天气、搜股票、定位、计算、检索文档、搜索网页。",
     emptyImages: "暂无图片",
   },
-  en: {
+      thinking: "深度摸鱼",
+    search: "联网搜索",
+en: {
     title: "Bumping Agent",
     newChat: "+ New Chat",
     docs: "Documents",
@@ -157,6 +183,8 @@ const LANG = {
     confirmClear: "Clear all messages?",
     newChatWelcome: "Hello! I'm Bumping. I can check weather, stocks, location, calculations, search documents and the web.",
     emptyImages: "No images",
+    thinking: "Deep Slacking",
+    search: "Web Search"
   }
 };
 
@@ -204,6 +232,9 @@ function applyLang() {
   try { localStorage.setItem('chat_lang', lang); } catch(e) {}
   applyLang();
   refreshOldChats();
+  loadPersonalities();
+  document.getElementById("modeThink").textContent = lang === "zh" ? "深度摸鱼" : "Deep Slacking";
+  document.getElementById("modeSearch").textContent = lang === "zh" ? "联网搜索" : "Web Search";
 }
 
 // Load saved language
@@ -215,6 +246,13 @@ try {
 let allMessages = [];
 let streamingDiv = null;
 let currentChatId = null;
+let currentModes = {};
+let currentPersonality = "";
+
+function toggleMode(mode) {
+  currentModes[mode] = !currentModes[mode];
+  document.getElementById("mode" + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.toggle("active");
+}
 
 function sv() { try { localStorage.setItem("chat", JSON.stringify(allMessages)); } catch(e) {} }
 function ld() {
@@ -228,7 +266,7 @@ function ld() {
         if (m.role === "user") {
           var d = document.createElement("div");
           d.className = "msg user";
-          d.textContent = m.content;
+          d.textContent = ce(m.content);
           msgs.appendChild(d);
         } else {
           showMessage(m);
@@ -321,7 +359,7 @@ async function send() {
     const resp = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: allMessages, lang: currentLang })
+      body: JSON.stringify({ messages: allMessages, lang: currentLang, modes: currentModes, personality: currentPersonality })
     });
     const data = await resp.json();
 
@@ -380,7 +418,7 @@ function showMessage(m) {
   if (m.role === 'assistant' && m.content) {
     var d = document.createElement('div');
     d.className = 'msg assistant';
-    d.textContent = m.content;
+    d.textContent = ce(m.content);
     msgs.appendChild(d);
     d.scrollIntoView({ behavior: 'smooth' });
   }
@@ -417,7 +455,7 @@ function restoreChat(key) {
       if (m.role === "user") {
         var d = document.createElement("div");
         d.className = "msg user";
-        d.textContent = m.content;
+        d.textContent = ce(m.content);
         msgs.appendChild(d);
       } else {
         showMessage(m);
@@ -432,7 +470,7 @@ function refreshOldChats() {
   var keys = [];
   for (var i = 0; i < localStorage.length; i++) {
     var k = localStorage.key(i);
-    if (k.startsWith("chat_")) keys.push(k);
+    if (k.startsWith("chat_") && k.indexOf("chat_title_") !== 0) keys.push(k);
   }
   console.log("refreshOldChats found", keys.length, "keys:", keys);
   if (keys.length === 0) {
@@ -446,8 +484,9 @@ function refreshOldChats() {
       var timeStr = ts.toLocaleString(currentLang === 'zh' ? "zh-CN" : "en-US");
       var data = JSON.parse(localStorage.getItem(key));
       // Generate title from first user message
-      var title = "新对话";
-      if (data && data.length > 0) {
+      var customTitle = localStorage.getItem("chat_title_" + key);
+      var title = customTitle || "新对话";
+      if (!customTitle && data && data.length > 0) {
         for (var j = 0; j < data.length; j++) {
           if (data[j].role === "user") {
             title = data[j].content.replace(/[\n\r]+/g, " ").trim();
@@ -456,9 +495,7 @@ function refreshOldChats() {
           }
         }
       }
-      return "<div class='doc-item' onclick='restoreChat(\"" + key + "\")' style='cursor:pointer;position:relative'>" + "<span class='doc-del' onclick='event.stopPropagation();deleteChat(\"" + key + "\")' style='position:absolute;top:4px;right:6px;font-size:14px;'>&times;</span>" +
-        "<div class='doc-name'>" + title + "</div>" +
-        "<div class='doc-meta'>" + timeStr + "</div></div>";
+      return "<div class='doc-item' onclick='restoreChat(\"" + key + "\")\' style='cursor:pointer;position:relative'>" + "<span class='doc-del' onclick='event.stopPropagation();deleteChat(\"" + key + "\")\' style='position:absolute;top:4px;right:6px;font-size:14px;'>&times;</span>" + "<span class='doc-del' onclick='event.stopPropagation();renameChat(\"" + key + "\")\' style='position:absolute;top:4px;right:26px;font-size:13px;'>\u270e</span>" + "<div class='doc-name'>" + title + "</div>" + "<div class='doc-meta'>" + timeStr + "</div></div>";
     } catch(e) {
       console.log("Skipping invalid key:", key, e);
       localStorage.removeItem(key);
@@ -466,6 +503,28 @@ function refreshOldChats() {
     }
   }).filter(function(x) { return x !== ""; }).join("");
   el.innerHTML = html;
+  el.onclick = function(e) {
+  var target = e.target;
+  var item = target.closest(".doc-item");
+  if (!item) return;
+  var key = item.getAttribute("data-key");
+  if (!key) return;
+  var action = target.getAttribute("data-action");
+  if (action === "delete") {
+    if (confirm("确认删除这个对话？")) {
+      localStorage.removeItem(key);
+      refreshOldChats();
+    }
+  } else if (action === "rename") {
+    var newTitle = prompt("输入新标题：");
+    if (newTitle && newTitle.trim()) {
+      localStorage.setItem("chat_title_" + key, newTitle.trim());
+      refreshOldChats();
+    }
+  } else {
+    restoreChat(key);
+    }
+  }
 }
 
 function clr() {
@@ -479,7 +538,7 @@ function clr() {
 function addMessage(text, role) {
   var div = document.createElement('div');
   div.className = 'msg ' + role;
-  div.textContent = text;
+  div.textContent = ce(text);
   document.getElementById('messages').appendChild(div);
   div.scrollIntoView({ behavior: 'smooth' });
 }
@@ -516,6 +575,84 @@ function saveApiKey() {
   }).catch(function(e) { alert("Network error: " + e.message); })
   .finally(function() { btn.textContent = "Save"; btn.disabled = false; });
 }
+function updateModeLabels() {
+  if (currentLang === "zh") {
+    document.getElementById("modeThink").textContent = "深度摸鱼";
+    document.getElementById("modeSearch").textContent = "联网搜索";
+  } else {
+    document.getElementById("modeThink").textContent = "Deep Slacking";
+    document.getElementById("modeSearch").textContent = "Web Search";
+  }
+}
+function updateModeLabels() {
+  var mode = currentLang === "zh" ? "深度摸鱼" : "Deep Slacking";
+  document.getElementById("modeThink").textContent = mode;
+  mode = currentLang === "zh" ? "联网搜索" : "Web Search";
+  document.getElementById("modeSearch").textContent = mode;
+}
+
+function loadPersonalities() {
+  fetch("/personalities").then(function(r) { return r.json(); }).then(function(data) {
+    var sel = document.getElementById("personaSelect");
+    sel.innerHTML = '<option value="" disabled selected>' + (currentLang === "zh" ? "性格" : "Personality") + '</option>';
+    data.forEach(function(p) {
+      var opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = currentLang === "zh" ? p.name : (p.name_en || p.name);
+      sel.appendChild(opt);
+    });
+  }).catch(function() {});
+}
+function selectPersonality() {
+  currentPersonality = document.getElementById("personaSelect").value;
+  var delBtn = document.getElementById("personaDelBtn");
+  if (delBtn) {
+    delBtn.style.display = currentPersonality ? "inline-block" : "none";
+  }
+}
+function generatePersonality(input) {
+  var file = input.files[0];
+  if (!file) return;
+  showToast(currentLang === "zh" ? "正在分析聊天记录..." : "Analyzing chat records...");
+  var form = new FormData();
+  form.append("file", file);
+  form.append("lang", currentLang);
+  var btn = document.getElementById("personaUploadBtn");
+  btn.textContent = "...";
+  btn.disabled = true;
+  fetch("/personalities/generate", { method: "POST", body: form })
+  .then(function(r) { return r.json(); })
+.then(function(data) {
+    if (data.id) {
+      loadPersonalities();
+      document.getElementById("personaSelect").value = data.id;
+      currentPersonality = data.id;
+      selectPersonality();
+      showToast(data.message || "性格生成成功");
+    } else {
+      showToast(data.error || "分析失败", true);
+    }
+  }).catch(function(e) { showToast(e.message, true); })
+  .finally(function() { btn.textContent = "+"; btn.disabled = false; input.value = ""; });
+}
+function deletePersonality() {
+  var pid = currentPersonality;
+  if (!pid) return;
+  if (!confirm(currentLang === "zh" ? "确认删除这个性格？" : "Delete this personality?")) return;
+  fetch("/personalities/" + encodeURIComponent(pid), { method: "DELETE" })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      showToast(data.error, true);
+    } else {
+      currentPersonality = "";
+      document.getElementById("personaSelect").value = "";
+      loadPersonalities();
+      showToast(data.message || "性格已删除");
+      if (document.getElementById("personaDelBtn")) document.getElementById("personaDelBtn").style.display = "none";
+    }
+  }).catch(function(e) { showToast(e.message, true); });
+}
 function updateApiStatus() {
   fetch("/api/key/status").then(function(r) { return r.json(); }).then(function(data) {
     var el = document.getElementById("settingsBtn");
@@ -544,17 +681,60 @@ function checkSavedKey() {
   } catch(e) {}
   updateApiStatus();
 }
-if (document.readyState === "complete") { checkSavedKey(); }
-else { window.addEventListener("load", checkSavedKey); }
+if (document.readyState === "complete") { checkSavedKey(); refreshOldChats(); updateModeLabels(); loadPersonalities(); }
+else { window.addEventListener("load", function() { checkSavedKey(); refreshOldChats(); updateModeLabels(); loadPersonalities(); }); }
 
-function deleteChat(key) {
-  if (!confirm("确认删除这个对话？")) return;
-  try {
-    localStorage.removeItem(key);
-    refreshOldChats();
-  } catch(e) {}
+
+
+function renameChat(key) {
+  var newTitle = prompt("输入新标题：");
+  if (newTitle && newTitle.trim()) {
+    try {
+      localStorage.setItem("chat_title_" + key, newTitle.trim());
+      refreshOldChats();
+    } catch(e) {}
+  }
 }
 
+// ====== 微信表情转换（前端兜底）=====
+var _wechatEmoji = {
+  "微笑": "\U0001f642", "呲牙": "\U0001f601", "偷笑": "\U0001f602",
+  "害羞": "\U0001f633", "尴尬": "\U0001f605", "发呆": "\U0001f636",
+  "撇嘴": "\U0001f61e", "难过": "\U0001f622", "流泪": "\U0001f62d",
+  "大哭": "\U0001f62d", "恐惧": "\U0001f628", "惊恐": "\U0001f631",
+  "惊讶": "\U0001f632", "白眼": "\U0001f644", "抠鼻": "\U0001f624",
+  "得意": "\U0001f60f", "阴险": "\U0001f608", "坏笑": "\U0001f608",
+  "色": "\U0001f60b", "亲亲": "\U0001f618", "飞吻": "\U0001f618",
+  "爱心": "\u2764\ufe0f", "心碎": "\U0001f494", "嘴唇": "\U0001f48b",
+  "强": "\U0001f44d", "赞": "\U0001f44d", "抱拳": "\U0001f4aa",
+  "拳头": "\U0001f4aa", "握手": "\U0001f91d", "加油": "\U0001f64c",
+  "合十": "\U0001f64f", "鼓掌": "\U0001f44f", "调皮": "\U0001f61c",
+  "勾引": "\U0001f446", "衰": "\U0001f937", "骷髅": "\U0001f480",
+  "敲打": "\U0001f4a2", "抓狂": "\U0001f4a2", "炸弹": "\U0001f4a3",
+  "便便": "\U0001f4a9", "咖啡": "\u2615", "啤酒": "\U0001f37a",
+  "蛋糕": "\U0001f370", "西瓜": "\U0001f349", "饭": "\U0001f372",
+  "猪头": "\U0001f437", "玫瑰": "\U0001f339", "凋谢": "\U0001f33a",
+  "太阳": "\u2600\ufe0f", "月亮": "\U0001f319", "星星": "\u2b50",
+  "闪电": "\u26a1", "礼物": "\U0001f381", "红包": "\U0001f4b0",
+  "菜刀": "\U0001f5e1\ufe0f", "OK": "\U0001f44c", "ok": "\U0001f44c",
+  "胜利": "\u270c\ufe0f", "NO": "\U0001f645", "再见": "\U0001f44b"
+};
+function ce(text) {
+  if (!text) return text;
+  return text.replace(/\[([^\]]+)\]/g, function(m, key) {
+    if (_wechatEmoji[key]) return _wechatEmoji[key];
+    // 也匹配完整中文括号【】
+    return m;
+  });
+}
+function showToast(msg, isError) {
+  var el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "toast" + (isError ? " error" : "") + " show";
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(function() { el.classList.remove("show"); }, isError ? 4000 : 2500);
+}
 function deleteChat(key) {
   if (!confirm(t("confirmDelete"))) return;
   try {

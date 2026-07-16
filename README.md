@@ -1,25 +1,44 @@
 # Bumping Agent
 
-A warm, emotional AI companion — powered by LangGraph + DeepSeek, with built-in RAG knowledge base, web search, stock quotes, weather, image analysis, and language switching. All wrapped in a clean web UI.
+**Your personal AI. Your data. Your rules.**
 
-Bumping speaks like a caring older sister (知心姐姐): patient, warm, and reassuring. No robotic lists, no "I'm an AI" disclaimers — just natural, flowing conversation.
+Bumping is a private, customizable AI assistant that runs entirely on your machine.
 
-## Features
+**Make it yours:**
+- **Bring your own model** — Connect your own API key (DeepSeek or OpenAI)
+- **Build your own knowledge base** — Upload docs, PDFs, Excel, emails, chat logs
+- **Set your own personality** — Change the system prompt to make Bumping sound like you
+- **Keep your data private** — Everything stays on your machine, zero servers
 
-| Feature | Description |
-|---------|-------------|
-| ❤️ **Emotional Chat** | Warm, human-like conversation. Never bullet points or robotic replies |
-| 🌤 **Weather** | Real-time weather for any city (via wttr.in) |
-| 📍 **Location** | IP-based geolocation |
-| 🧮 **Calculator** | Math expression evaluation |
-| 🕐 **Time** | Current date and time |
-| 📄 **Document RAG** | Upload .txt/.md/.pdf files and ask questions |
-| 📈 **Stock Price** | A-shares (China) and US stocks |
-| 🌐 **Web Search** | Bing search integration |
-| 🖼 **Image Analysis** | Analyze uploaded images (via GPT-4o-mini vision) |
-| 📰 **Webpage Fetch** | Extract and summarize webpage content |
+Download it, run it, customize it. Everyone gets their own personal AI.
 
-﻿## Quick Start
+## Quick Start
+
+[![Download ZIP](https://img.shields.io/badge/Download%20ZIP-blue?style=for-the-badge&logo=github)](https://github.com/BumpingT/Bumping-agent/archive/refs/heads/main.zip)
+
+> **No terminal setup needed.** Just run the app and enter your API key in the browser.
+
+```bash
+# 1. Download the ZIP and extract
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Start the server
+python chat_app.py
+
+# 4. Open http://localhost:5000
+#    The app will prompt you to enter your API key in the browser.
+```
+
+Get an API key: [DeepSeek](https://platform.deepseek.com/) (recommended, cheaper) or [OpenAI](https://platform.openai.com/)
+
+```bash
+# Or set via environment variable (for server deployments):
+# Windows:    $env:DEEPSEEK_API_KEY = "sk-your-key"
+# macOS/Linux: export DEEPSEEK_API_KEY="sk-your-key"
+```
+
+art
 
 [![Download ZIP](https://img.shields.io/badge/Download%20ZIP-blue?style=for-the-badge&logo=github)](https://github.com/BumpingT/Bumping-agent/archive/refs/heads/main.zip)
 

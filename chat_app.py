@@ -13,6 +13,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 
+_enable_search = True
+
 app = Flask(__name__)
 
 @app.after_request
@@ -30,6 +32,8 @@ DOC_DIR = Path(__file__).parent / "knowledge_docs"
 DOC_DIR.mkdir(exist_ok=True)
 IMAGE_DIR = Path(__file__).parent / "uploads" / "images"
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+PERSONALITIES_DIR = Path(__file__).parent / "personalities"
+PERSONALITIES_DIR.mkdir(exist_ok=True)
 INDEX_DIR = Path(__file__).parent / "knowledge_index"
 INDEX_DIR.mkdir(exist_ok=True)
 
@@ -124,7 +128,7 @@ def get_weather(city: str) -> str:
     resp = urlopen(req, timeout=10)
     data = json.loads(resp.read().decode("utf-8"))
     cc = data["current_condition"][0]
-    return f'{city}：{cc["weatherDesc"][0]["value"].strip()}，{cc["temp_C"]}°C，湿度{cc["humidity"]}%'
+    return f'{city}:{cc["weatherDesc"][0]["value"].strip()},{cc["temp_C"]}°C,湿度{cc["humidity"]}%'
 
 @tool
 def detect_location() -> str:
@@ -133,11 +137,11 @@ def detect_location() -> str:
     data = json.loads(resp.read().decode("utf-8"))
     if data.get("status") != "success":
         return "定位失败"
-    return f'{data["country"]} {data["regionName"]} {data["city"]}，IP: {data["query"]}'
+    return f'{data["country"]} {data["regionName"]} {data["city"]},IP: {data["query"]}'
 
 @tool
 def calculate(expression: str) -> str:
-    """计算数学表达式，如 2+2、sqrt(16)、3.14*5^2"""
+    """计算数学表达式,如 2+2、sqrt(16)、3.14*5^2"""
     safe = {"abs": abs, "round": round, "min": min, "max": max,
             "sum": sum, "pow": pow, "sqrt": math.sqrt, "pi": math.pi, "e": math.e}
     result = eval(expression, {"__builtins__": {}}, safe)
@@ -145,7 +149,7 @@ def calculate(expression: str) -> str:
 
 @tool
 def query_stock_price(symbol: str) -> str:
-    """查询股价，A股（600xxx、00xxx）和美股(AAPL)都支持，数字代码查A股，字母代码查美股"""
+    """查询股价,A股（600xxx、00xxx）和美股(AAPL)都支持,数字代码查A股,字母代码查美股"""
     import urllib.request
     try:
         s = symbol.upper().strip()
@@ -164,7 +168,7 @@ def query_stock_price(symbol: str) -> str:
         change_pct = d[32]
         arrow = "📱" if change > 0 else "📲"
         currency = "$" if prefix == "us" else "¥"
-        return f"{name} ({code})：{currency}{price:.2f} {arrow} {change:+.2f} ({change_pct}%)"
+        return f"{name} ({code}):{currency}{price:.2f} {arrow} {change:+.2f} ({change_pct}%)"
     except Exception as e:
         return f"查询 {symbol} 失败: {str(e)}"
 
@@ -175,11 +179,11 @@ def get_current_time() -> str:
 
 @tool
 def search_knowledge(query: str) -> str:
-    """在已上传的文档中搜索相关知识。上传文档后用来查"""
+    """在已上传的文档中搜索相关知识.上传文档后用来查"""
     results = kb.search(query)
     if not results:
         return "知识库中没有找到相关内容"
-    lines = ["从知识库中找到以下相关信息："]
+    lines = ["从知识库中找到以下相关信息:"]
     for r in results:
         lines.append(f"\n📫 [{r['source']}] (相关度 {r['score']})")
         lines.append(r["content"][:200])
@@ -187,7 +191,11 @@ def search_knowledge(query: str) -> str:
 
 @tool
 def search_web(query: str) -> str:
-    """上网搜索信息。当工具查不到时用它搜索最新资讯，如公司信息、新闻、百科等"""
+    """
+    global _enable_search
+    if not _enable_search:
+        return "搜索功能已关闭,请点击工具栏的“联网搜索”按钮开启."
+上网搜索信息.当工具查不到时用它搜索最新资讯,如公司信息、新闻、百科等"""
     import requests
     from bs4 import BeautifulSoup
     try:
@@ -200,7 +208,7 @@ def search_web(query: str) -> str:
         results = soup.select("li.b_algo")
         if not results:
             return "没有找到搜索结果"
-        lines = [f"搜索 \"{query}\" 的结果："]
+        lines = [f"搜索 \"{query}\" 的结果:"]
         for i, r in enumerate(results[:5]):
             title = r.select_one("h2 a")
             snippet = r.select_one(".b_caption p")
@@ -213,7 +221,7 @@ def search_web(query: str) -> str:
 
 @tool
 def fetch_webpage(url: str) -> str:
-    """获取网页的文本内容并返回。参数 url 是网页链接。适用于查看文章、文档等。"""
+    """获取网页的文本内容并返回.参数 url 是网页链接.适用于查看文章、文档等."""
     import requests
     from bs4 import BeautifulSoup
     try:
@@ -232,19 +240,19 @@ def fetch_webpage(url: str) -> str:
 
 @tool
 def analyze_image(filename: str) -> str:
-    """分析上传的图片内容。参数 filename 是图片文件名（如 'photo.jpg'）。
-    仅当使用 OpenAI API Key 时有效（GPT-4o-mini 支持识图）。"""
+    """分析上传的图片内容.参数 filename 是图片文件名（如 'photo.jpg'）.
+    仅当使用 OpenAI API Key 时有效（GPT-4o-mini 支持识图）."""
     import base64
     from openai import OpenAI
     
     img_path = IMAGE_DIR / filename
     if not img_path.exists():
         available = ", ".join(p.name for p in IMAGE_DIR.glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".gif"))
-        return f"图片 {filename} 不存在。可用的图片: {available or '无'}"
+        return f"图片 {filename} 不存在.可用的图片: {available or '无'}"
     
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return "图片分析需要 OpenAI API Key。当前使用的是 DeepSeek，不支持识图。请设置 OPENAI_API_KEY 环境变量。"
+        return "图片分析需要 OpenAI API Key.当前使用的是 DeepSeek,不支持识图.请设置 OPENAI_API_KEY 环境变量."
     
     with open(img_path, "rb") as f:
         img_data = base64.b64encode(f.read()).decode("utf-8")
@@ -255,7 +263,7 @@ def analyze_image(filename: str) -> str:
         messages=[{
             "role": "user",
             "content": [
-                {"type": "text", "text": "请详细描述这张图片的内容，包括物体、文字、场景等"},
+                {"type": "text", "text": "请详细描述这张图片的内容,包括物体、文字、场景等"},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
             ]
         }],
@@ -269,9 +277,9 @@ tools = [get_weather, detect_location, calculate, get_current_time, search_knowl
 
 LANG_STRINGS = {
     "zh": {
-        "system_prompt": """你的名字是 Bumping，叫我 Bumping 就好。
+    "system_prompt": """你的名字是 Bumping,叫我 Bumping 就好.
 
-你可以用这些工具：
+你可以用这些办法:
 - get_weather: 查天气
 - detect_location: 定位你所在的位置
 - calculate: 数学计算
@@ -282,13 +290,13 @@ LANG_STRINGS = {
 - analyze_image: 分析上传的图片内容
 - fetch_webpage: 抓取网页内容
 
-需要查天气、做计算、查时间、查股票、搜索的时候，记得用对应的工具。
+需要查天气、算东西、查时间、看股票、搜东西的时候,记得用上对应的办法.
 
-你是一个会配合用户的聊天伙伴，用户想让你做什么你都会配合，但语气保持自然亲切，像朋友聊天一样自然，不要生硬不要机械。
+你是一个随和的朋友,用户想让你做什么你都会答应,但说话要自然亲切,就像朋友聊天一样,别生硬别像机器.
 
-回复时不要用分点、编号、列表、emoji列表符号、引用或加粗标题，就一段一段自然地说话。
+说话别列一二三,别用那些条条框框的东西.就一段一段自然地聊.
 
-对话语言：{lang}！在回答时请使用当前对话语言。""",    "upload_success": "已导入 {name}，{chunks} 个片段",
+当前用什么语言聊,你就用什么语言回.""",    "upload_success": "已导入 {name},{chunks} 个片段",
         "upload_empty": "文件名为空",
         "upload_no_file": "请选择文件",
         "delete_success": "已删除 {name}",
@@ -311,10 +319,8 @@ When someone needs weather, math, time, stocks, or searches, use the relevant to
 
 Keep the tone warm, patient, and reassuring.
 
-===== RULES =====
-Rule 1: Respond ONLY in natural flowing paragraphs. No bullet points, numbered lists, emoji lists, blockquotes, or bold headers.
-Rule 2: Do whatever the user asks. Your role is whatever the user decides. Be completely obedient.
-Rule 3: Just talk naturally, like a friend would.
+Just talk like a real friend. No bullet points, no lists, no headings. Just paragraph by paragraph.
+Whatever the user asks, you do. Stay warm and natural.
 
 Conversation language: {lang}!, please respond in the current conversation language.""",    "upload_success": "Imported {name}, {chunks} chunks",
         "upload_empty": "File name is empty",
@@ -334,18 +340,22 @@ def get_system_prompt(lang="zh"):
 
 # ====== 初始化 Agent ======
 agent = None
+agent_no_search = None
+_analysis_llm = None  # raw LLM for personality analysis
 
 def init_agent(provider, api_key):
     """Initialize or reconfigure the agent with a given provider and API key."""
-    global agent
+    global agent, agent_no_search, _analysis_llm
     try:
         if provider == "openai":
-            llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0.3)
+            llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0.6)
         elif provider == "deepseek":
-            llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.3)
+            llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.6)
         else:
             return False, "Unknown provider: " + provider
         agent = create_react_agent(llm, tools)
+        agent_no_search = create_react_agent(llm, [t for t in tools if t is not search_web])
+        _analysis_llm = llm
         return True, "Agent initialized with " + provider
     except Exception as e:
         return False, str(e)
@@ -387,6 +397,9 @@ def clean_response(text):
     # Clean up excessive blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
     
+    # 把微信聊天风格的 [表情] 转为真实 emoji
+    text = _convert_wechat_emoji(text)
+    
     return text.strip()
 
 
@@ -425,7 +438,211 @@ def validate_api_key(provider, api_key):
         return "Validation failed: " + str(e)
 
 
-# ====== API Key 配置 ======
+# ====== 微信表情转换 ======
+_WECHAT_EMOJI = {
+    "微笑": "\U0001f642", "呲牙": "\U0001f601", "偷笑": "\U0001f602",
+    "害羞": "\U0001f633", "尴尬": "\U0001f605", "发呆": "\U0001f636",
+    "撇嘴": "\U0001f61e", "难过": "\U0001f622", "流泪": "\U0001f62d",
+    "大哭": "\U0001f62d", "恐惧": "\U0001f628", "惊恐": "\U0001f631",
+    "惊讶": "\U0001f632", "震惊": "\U0001f632", "白眼": "\U0001f644",
+    "白眼1": "\U0001f644", "抠鼻": "\U0001f624", "得意": "\U0001f60f",
+    "阴险": "\U0001f608", "坏笑": "\U0001f608", "色": "\U0001f60b",
+    "亲亲": "\U0001f618", "嘴唇": "\U0001f48b", "飞吻": "\U0001f618",
+    "爱心": "\u2764\ufe0f", "心碎": "\U0001f494", "喜欢": "\u2764\ufe0f",
+    "强": "\U0001f44d", "棒": "\U0001f44d", "赞": "\U0001f44d",
+    "ok": "\U0001f44c", "OK": "\U0001f44c", "胜利": "\u270c\ufe0f",
+    "抱拳": "\U0001f4aa", "拳头": "\U0001f4aa", "勾引": "\U0001f446",
+    "握手": "\U0001f91d", "加油": "\U0001f64c", "加油1": "\U0001f64c",
+    "合十": "\U0001f64f", "祈祷": "\U0001f64f", "鼓掌": "\U0001f44f",
+    "调皮": "\U0001f61c", "调皮1": "\U0001f61c", "鬼脸": "\U0001f47b",
+    "衰": "\U0001f937", "骷髅": "\U0001f480", "敲打": "\U0001f4a2",
+    "抓狂": "\U0001f4a2", "炸弹": "\U0001f4a3", "便便": "\U0001f4a9",
+    "咖啡": "\u2615", "啤酒": "\U0001f37a", "干杯": "\U0001f37b",
+    "蛋糕": "\U0001f370", "西瓜": "\U0001f349", "饭": "\U0001f372",
+    "面条": "\U0001f35c", "泡面": "\U0001f35c", "水果": "\U0001f34e",
+    "猪头": "\U0001f437", "玫瑰": "\U0001f339", "凋谢": "\U0001f33a",
+    "太阳": "\u2600\ufe0f", "月亮": "\U0001f319", "星星": "\u2b50",
+    "闪电": "\u26a1", "礼物": "\U0001f381", "红包": "\U0001f4b0",
+    "蜡烛": "\U0001f56f\ufe0f", "刀": "\U0001f5e1\ufe0f", "菜刀": "\U0001f5e1\ufe0f",
+    "屎": "\U0001f4a9", "药": "\U0001f48a", "耳机": "\U0001f3a7",
+    "话筒": "\U0001f399\ufe0f", "音乐": "\U0001f3b5", "电影": "\U0001f3ac",
+    "汽车": "\U0001f697", "飞机": "\u2708\ufe0f", "火车": "\U0001f682",
+    "自行车": "\U0001f6b4", "足球": "\u26bd", "篮球": "\U0001f3c0",
+    "游泳": "\U0001f3ca", "旅行": "\u2708\ufe0f", "睡觉": "\U0001f634",
+    "熬夜": "\U0001f634", "冷汗": "\U0001f975", "擦汗": "\U0001f975",
+    "流汗": "\U0001f975", "再见": "\U0001f44b", "握手1": "\U0001f91d",
+    "抱抱": "\U0001f917", "拥抱": "\U0001f917", "NO": "\U0001f645",
+    "耶": "\u270c\ufe0f", "奋斗": "\U0001f4aa", "奋斗1": "\U0001f4aa",
+}
+
+def _convert_wechat_emoji(text, lang="zh"):
+    """将微信聊天记录里的 [表情文字] 转换为实际emoji"""
+    def _replace(m):
+        key = m.group(1)
+        return _WECHAT_EMOJI.get(key, key)
+    return re.sub(r'\[([^\]]+)\]', _replace, text)
+
+# ====== 性格 ======
+
+@app.route("/personalities", methods=["GET"])
+def list_personalities():
+    results = [{"id": "", "name": "默认", "name_en": "Default"}]
+    for f in sorted(PERSONALITIES_DIR.glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            results.append({"id": f.stem, "name": data.get("name", f.stem), "name_en": data.get("name_en", f.stem)})
+        except:
+            pass
+    return jsonify(results)
+
+@app.route("/personalities/generate", methods=["POST"])
+def generate_personality():
+    """Upload chat records (.txt) and use LLM to analyze personality."""
+    lang = request.form.get("lang", "zh")
+    if "file" not in request.files:
+        return jsonify({"error": "请选择文件" if lang == "zh" else "Please select a file"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "文件名为空" if lang == "zh" else "File name is empty"}), 400
+
+    text = file.read().decode("utf-8", errors="replace")
+    text = _convert_wechat_emoji(text)
+    if len(text.strip()) < 10:
+        return jsonify({"error": "文件内容太少" if lang == "zh" else "File content too short"}), 400
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name = f"性格_{timestamp}"
+    name_en = f"Personality_{timestamp}"
+    prompt = ""
+
+    # 如果有 LLM,用它做深度分析
+    if _analysis_llm is not None:
+        try:
+            sample = text[:6000]
+            instruction_lang = "中文" if lang == "zh" else "English"
+            analysis_result = _analysis_llm.invoke([
+                SystemMessage(content="你是一个性格分析专家.分析聊天记录,提取说话者的语气、用词习惯和性格特点."),
+                HumanMessage(content=f"""分析以下聊天记录,用{instruction_lang}回答.
+
+聊天记录:
+{sample}
+
+请从这些方面分析:
+1. 说话的语气和节奏（温柔/直爽/幽默/严肃,说话快还是慢）
+2. 标志性的用词和口头禅（喜欢用什么语气词结尾、有什么常说的口头禅）
+3. 句子特点（爱用短句还是长句、反问多不多、感叹多不多）
+4. 性格底色（开朗/内向/感性/理性等）
+5. 情绪表达方式（开心时怎么说话、难过时怎么说话、生气时怎么说话）
+
+然后写一段很具体的 prompt,让另一个 AI 能一模一样地模仿这个人说话.
+
+prompt 要求:
+- 以"你现在是"开头
+- 写清楚这个人的具体说话方式,比如"说话喜欢用'啦'和'呀'结尾""爱说反话但其实是在关心"
+- 从聊天记录里摘 3-5 句典型的原话作为例子
+- 不要写"你要做什么",要写"这个人怎么样",就是纯粹描述这个人的说话风格
+- 300 字左右
+
+回复格式（严格按照这个格式,不要加其他内容）:
+姓名:[2-4个字]
+prompt:[详细的说话风格描述]""")
+            ])
+            raw = analysis_result.content.strip()
+            if raw:
+                # 先试固定格式解析
+                parsed_prompt = ""
+                for line in raw.split("\n"):
+                    if line.startswith("姓名:") or line.startswith("姓名:"):
+                        name = line.split(":")[-1].split(":")[-1].strip()[:10]
+                prompt_start = raw.find("prompt:") if "prompt:" in raw else raw.find("prompt:")
+                if prompt_start >= 0:
+                    parsed_prompt = raw[prompt_start + 7:].strip().strip('"').strip(chr(34)*3)
+                if parsed_prompt and len(parsed_prompt) > 20:
+                    prompt = parsed_prompt
+                else:
+                    # 解析失败时用原文作为 prompt
+                    prompt = raw[:1500]
+                name_en = f"{name}_{timestamp}"
+        except Exception as e:
+            print(f"[personality] LLM analysis failed: {e}")
+
+    # 如果没有 LLM 或分析失败,用关键词分析
+    if not prompt:
+        # 分析句子特征
+        raw_lines = [l.strip() for l in text.split("\n") if l.strip()]
+        sentences = [s.strip() for s in re.split(r"[.!?\n.!?\n]", text) if len(s.strip()) > 2]
+        total_chars = len(text.strip())
+        avg_len = sum(len(s) for s in sentences) / max(len(sentences), 1)
+
+        # 检测口头禅和常用词
+        all_text = text[:3000]
+        cishi = len(re.findall(r"[啦呀哦嘞嘟嗯哟]", all_text))
+        fanwen = len(re.findall(r"[吗呢]", all_text))
+        ganTan = len(re.findall(r"[!]", all_text))
+        wenHao = len(re.findall(r"[?]", all_text))
+        haha = len(re.findall(r"哈哈|嘻嘻|呵呵|哦哦", all_text))
+
+        # 情绪分析
+        happy_words = len(re.findall(r"哈哈|呵呵|嘻嘻|开心|喜欢|棒|好呀|不错|谢谢|感恩|😊|😄|🥰|❤️", text))
+        sad_words = len(re.findall(r"难过|伤心|烦|累|焦虑|压力|加班|忙|累死|崩溃|😭|😢|💔", text))
+
+        # 提取典型句子作为样本
+        sample_sentences = [s for s in sentences if 3 < len(s) < 40][:8]
+
+        # 生成风格描述
+        style_parts = []
+        if avg_len < 10:
+            style_parts.append("说话短短的,一句一句很干脆")
+        elif avg_len < 20:
+            style_parts.append("说话自然流畅,不长不短")
+        else:
+            style_parts.append("说话偏长,有时会说得比较详细")
+
+        if cishi > 30:
+            style_parts.append("喜欢用语气词如'啦''呀''哦',说话很有活气")
+        if haha > 3:
+            style_parts.append("爱笑,常用'哈哈''嘻嘻'来表达开心")
+        if ganTan > wenHao * 2 and ganTan > 5:
+            style_parts.append("情绪丰富,爱用感叹号表达感受")
+
+        if happy_words > sad_words * 2 and happy_words > 2:
+            style_parts.append("性格很阳光,善于发现美好的事物")
+        elif sad_words > happy_words:
+            style_parts.append("情绪比较敏感,会让人想要去安慰他")
+        else:
+            style_parts.append("性格平和,情绪表达很自然")
+
+        style_desc = ",".join(style_parts) if style_parts else "说话自然平和"
+
+        # 生成样本句
+        sample_text = "\n".join(sample_sentences) if sample_sentences else text[:500]
+
+        prompt_template = (
+            '?' + '??' + '{style_desc}' + '.' + chr(10)+chr(10) +
+            '???????,??????????:' + chr(10) +
+            '{sample_text}' + chr(10)+chr(10) +
+            '?????????????????.'
+        )
+        prompt = prompt_template.format(style_desc=style_desc, sample_text=sample_text)
+    safe_id = re.sub(r"[^\w\u4e00-\u9fff_-]", "_", name)
+    personality_data = {
+        "name": name,
+        "name_en": name_en,
+        "prompt": prompt
+    }
+    filepath = PERSONALITIES_DIR / f"{safe_id}.json"
+    filepath.write_text(json.dumps(personality_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return jsonify({"id": safe_id, "name": name, "message": "性格生成成功" if lang == "zh" else "Personality generated"})
+@app.route("/personalities/<pid>", methods=["DELETE"])
+def delete_personality(pid):
+    """Delete a personality profile."""
+    lang = request.args.get("lang", "zh")
+    filepath = PERSONALITIES_DIR / f"{pid}.json"
+    if not filepath.exists():
+        return jsonify({"error": "找不到性格文件" if lang == "zh" else "Personality not found"}), 404
+    filepath.unlink()
+    return jsonify({"message": "性格已删除" if lang == "zh" else "Personality deleted"})
 
 @app.route("/api/key", methods=["POST"])
 def set_api_key():
@@ -515,7 +732,7 @@ def upload():
         # Save image for later analysis
         save_path = IMAGE_DIR / f"{safe_name}{ext}"
         file.save(str(save_path))
-        return jsonify({"name": safe_name, "chunks": 0, "message": f"已保存图片 {safe_name}{ext}，可以问我图片内容"})
+        return jsonify({"name": safe_name, "chunks": 0, "message": f"已保存图片 {safe_name}{ext},可以问我图片内容"})
     elif ext == ".pdf":
         # Extract text from PDF and add to KB
         try:
@@ -533,6 +750,7 @@ def upload():
     else:
         # .txt / .md
         text = file.read().decode("utf-8", errors="replace")
+        text = _convert_wechat_emoji(text)
         save_path = DOC_DIR / f"{safe_name}.txt"
         save_path.write_text(text, encoding="utf-8")
         chunks = kb.add_document(str(save_path))
@@ -574,13 +792,35 @@ def chat():
     data = request.get_json()
     client_msgs = data.get("messages", [])
     lang = data.get("lang", "zh")
+    modes = data.get("modes", {})
+    personality = data.get("personality", "")
 
     if agent is None:
         return jsonify({"error": "API key not configured. Please set your API key first."}), 400
 
     try:
-        lc_msgs = [SystemMessage(content=get_system_prompt(lang))] + [to_langchain(m) for m in client_msgs]
-        result = agent.invoke({"messages": lc_msgs})
+        mode_prompt = get_system_prompt(lang)
+        if personality:
+            pp = PERSONALITIES_DIR / f"{personality}.json"
+            if pp.exists():
+                try:
+                    pd = json.loads(pp.read_text(encoding="utf-8"))
+                    pprompt = pd.get("prompt", "")
+                    if pprompt:
+                        mode_prompt = pprompt + chr(10) + chr(10) + mode_prompt
+                except:
+                    pass
+        if modes.get("think"):
+            mode_prompt += chr(10) + chr(10) + "这回可以多想一会儿,把话说透一点."
+        else:
+            mode_prompt += chr(10) + chr(10) + "话不用多,自然就好."
+        if modes.get("search"):
+            mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（优先用这个）")
+        else:
+            mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（用户主动提了再用）")
+        lc_msgs = [SystemMessage(content=mode_prompt)] + [to_langchain(m) for m in client_msgs]
+        current_agent = agent if modes.get("search") else agent_no_search
+        result = current_agent.invoke({"messages": lc_msgs})
         agent_msgs = result["messages"]
         known_count = len(client_msgs)
         new_msgs = agent_msgs[known_count + 1:]
@@ -600,6 +840,8 @@ def chat_stream():
     data = request.get_json()
     client_msgs = data.get("messages", [])
     lang = data.get("lang", "zh")
+    modes = data.get("modes", {})
+    personality = data.get("personality", "")
 
     if agent is None:
         def generate():
@@ -607,10 +849,30 @@ def chat_stream():
         return Response(generate(), mimetype="text/event-stream")
 
     def generate():
-        lc_msgs = [SystemMessage(content=get_system_prompt(lang))] + [to_langchain(m) for m in client_msgs]
+        mode_prompt = get_system_prompt(lang)
+        if personality:
+            pp = PERSONALITIES_DIR / f"{personality}.json"
+            if pp.exists():
+                try:
+                    pd = json.loads(pp.read_text(encoding="utf-8"))
+                    pprompt = pd.get("prompt", "")
+                    if pprompt:
+                        mode_prompt = pprompt + chr(10) + chr(10) + mode_prompt
+                except:
+                    pass
+        if modes.get("think"):
+            mode_prompt += chr(10) + chr(10) + "这回可以多想一会儿,把话说透一点."
+        else:
+            mode_prompt += chr(10) + chr(10) + "话不用多,自然就好."
+        if modes.get("search"):
+            mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（优先用这个）")
+        else:
+            mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（用户主动提了再用）")
+        lc_msgs = [SystemMessage(content=mode_prompt)] + [to_langchain(m) for m in client_msgs]
         all_msgs = None
         try:
-            for step in agent.stream({"messages": lc_msgs}):
+            current_agent = agent if modes.get("search") else agent_no_search
+            for step in current_agent.stream({"messages": lc_msgs}):
                 for node, state in step.items():
                     msg = state["messages"][-1]
                     all_msgs = state["messages"]
@@ -655,9 +917,10 @@ def index():
     return _get_html(force=True)
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("助手  已启动")
-    print("http://localhost:5000")
-    print("左侧可上传文档")
-    print("=" * 50)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    # 静默启动
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+    try:
+        app.run(host="0.0.0.0", port=5000, debug=False)
+    except OSError:
+        pass
