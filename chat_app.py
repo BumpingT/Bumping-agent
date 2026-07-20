@@ -191,11 +191,7 @@ def search_knowledge(query: str) -> str:
 
 @tool
 def search_web(query: str) -> str:
-    """
-    global _enable_search
-    if not _enable_search:
-        return "搜索功能已关闭,请点击工具栏的“联网搜索”按钮开启."
-上网搜索信息.当工具查不到时用它搜索最新资讯,如公司信息、新闻、百科等"""
+    """搜索网络获取最新信息。当用户需要查新闻、查公司信息、查百科知识、查最新资讯时，用这个工具上网搜索。参数 query 是搜索关键词。"""
     import requests
     from bs4 import BeautifulSoup
     try:
@@ -219,6 +215,31 @@ def search_web(query: str) -> str:
     except Exception as e:
         return f"搜索失败: {str(e)}"
 
+def _search_bing(query):
+    """直接搜索 Bing，不通过 @tool 装饰器（用于自动搜索）。"""
+    import requests
+    from bs4 import BeautifulSoup
+    try:
+        url = f"https://www.bing.com/search?q={requests.utils.quote(query)}"
+        resp = requests.get(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept-Language": "zh-CN,zh;q=0.9"
+        }, timeout=8)
+        soup = BeautifulSoup(resp.text, "lxml")
+        results = soup.select("li.b_algo")
+        if not results:
+            return ""
+        lines = []
+        for i, r in enumerate(results[:5]):
+            title = r.select_one("h2 a")
+            snippet = r.select_one(".b_caption p")
+            t = title.text.strip() if title else ""
+            s = snippet.text.strip()[:150] if snippet else ""
+            lines.append(f"{i+1}. {t}\n   {s}")
+        return "\n".join(lines)
+    except Exception as e:
+        return ""
+ 
 @tool
 def fetch_webpage(url: str) -> str:
     """获取网页的文本内容并返回.参数 url 是网页链接.适用于查看文章、文档等."""
@@ -351,6 +372,20 @@ def init_agent(provider, api_key):
             llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0.6)
         elif provider == "deepseek":
             llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com/v1", api_key=api_key, temperature=0.6)
+        elif provider == "ollama":
+            ollama_model = api_key  # reuse api_key param to pass model name
+            llm = ChatOpenAI(model=ollama_model, base_url="http://localhost:11434/v1", api_key="ollama", temperature=0.6)
+            try:
+                import urllib.request as _ur, json as _jn
+                _req = _ur.Request("http://localhost:11434/api/tags", method="GET")
+                _resp = _ur.urlopen(_req, timeout=5)
+                _tags = _jn.loads(_resp.read().decode("utf-8"))
+                _models = [m["name"] for m in _tags.get("models", [])]
+                if ollama_model not in _models:
+                    _available = ", ".join(_models) if _models else "没有已下载的模型，请用 ollama pull 下载"
+                    return False, f"模型 {ollama_model} 不存在。你已有的模型: {_available}"
+            except Exception as _e:
+                return False, f"无法连接 Ollama: {_e}"
         else:
             return False, "Unknown provider: " + provider
         agent = create_react_agent(llm, tools)
@@ -418,6 +453,8 @@ def validate_api_key(provider, api_key):
                 "https://api.deepseek.com/v1/models",
                 headers={"Authorization": "Bearer " + api_key}
             )
+        elif provider == "ollama":
+            return None
         else:
             return "Unknown provider"
 
@@ -650,10 +687,29 @@ def set_api_key():
     data = request.get_json()
     provider = data.get("provider", "").lower().strip()
     api_key = data.get("key", "").strip()
-    if not provider or not api_key:
-        return jsonify({"ok": False, "error": "Provider and key are required"}), 400
-    if provider not in ("openai", "deepseek"):
-        return jsonify({"ok": False, "error": "Provider must be 'openai' or 'deepseek'"}), 400
+    if not provider:
+        return jsonify({"ok": False, "error": "Provider is required"}), 400
+    if provider not in ("openai", "deepseek", "ollama"):
+        return jsonify({"ok": False, "error": "Provider must be 'openai', 'deepseek', or 'ollama'"}), 400
+    if provider == "ollama":
+        model = data.get("model", "qwen2.5:7b")
+        ok, msg = init_agent(provider, model)
+        if not ok:
+            import urllib.request, json
+            try:
+                req = urllib.request.Request("http://localhost:11434/api/tags", method="GET")
+                resp = urllib.request.urlopen(req, timeout=3)
+                tags = json.loads(resp.read().decode("utf-8"))
+                models = [m["name"] for m in tags.get("models", [])]
+                if models:
+                    msg += "。你已有的模型: " + ", ".join(models)
+                else:
+                    msg += "。请先用 ollama pull <model-name> 下载模型"
+            except:
+                msg += "。请确保 Ollama 已启动"
+        return jsonify({"ok": ok, "message": msg})
+    if not api_key:
+        return jsonify({"ok": False, "error": "API key required for " + provider}), 400
     # Validate the API key first
     err = validate_api_key(provider, api_key)
     if err:
@@ -674,6 +730,20 @@ def api_key_status():
         elif os.environ.get("DEEPSEEK_API_KEY"):
             provider = "deepseek"
     return jsonify({"configured": configured, "provider": provider})
+
+
+@app.route("/api/ollama/status", methods=["GET"])
+def ollama_status():
+    """Check if Ollama is running and list available models."""
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://localhost:11434/api/tags")
+        resp = urllib.request.urlopen(req, timeout=3)
+        data = json.loads(resp.read().decode("utf-8"))
+        models = [m["name"] for m in data.get("models", [])]
+        return jsonify({"running": True, "models": models})
+    except Exception as e:
+        return jsonify({"running": False, "models": [], "error": str(e)})
 
 # ====== 消息转换 ======
 
@@ -816,10 +886,24 @@ def chat():
             mode_prompt += chr(10) + chr(10) + "话不用多,自然就好."
         if modes.get("search"):
             mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（优先用这个）")
+            # 自动搜索（解决小模型不会调用工具的问题）
+            try:
+                for m in client_msgs:
+                    if m.get("role") == "user":
+                        _enable_search = True
+                        sr = _search_bing(m["content"][:100])
+                        _enable_search = False
+                        if sr and not sr.startswith("搜索失败"):
+                            mode_prompt += chr(10) + chr(10) + "【自动搜索结果】" + chr(10) + sr[:1500] + chr(10) + chr(10) + "请参考以上搜索结果回答用户问题。如果搜索结果不相关，直接用自己的知识回答。"
+                            mode_prompt = mode_prompt.replace("- search_web: 上网搜信息（优先用这个）", "# 联网搜索已自动执行")
+                            mode_prompt = mode_prompt.replace("上网搜信息（优先用这个）", "联网搜索已完成，请参考上方结果")
+                        break
+            except:
+                pass
         else:
             mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（用户主动提了再用）")
         lc_msgs = [SystemMessage(content=mode_prompt)] + [to_langchain(m) for m in client_msgs]
-        current_agent = agent if modes.get("search") else agent_no_search
+        current_agent = agent_no_search
         result = current_agent.invoke({"messages": lc_msgs})
         agent_msgs = result["messages"]
         known_count = len(client_msgs)
@@ -866,12 +950,26 @@ def chat_stream():
             mode_prompt += chr(10) + chr(10) + "话不用多,自然就好."
         if modes.get("search"):
             mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（优先用这个）")
+            # 自动搜索（解决小模型不会调用工具的问题）
+            try:
+                for m in client_msgs:
+                    if m.get("role") == "user":
+                        _enable_search = True
+                        sr = search_web(m["content"][:100])
+                        _enable_search = False
+                        if sr and not sr.startswith("搜索失败"):
+                            mode_prompt += chr(10) + chr(10) + "【自动搜索结果】" + chr(10) + sr[:1500] + chr(10) + chr(10) + "请参考以上搜索结果回答用户问题。如果搜索结果不相关，直接用自己的知识回答。"
+                            mode_prompt = mode_prompt.replace("- search_web: 上网搜信息（优先用这个）", "# 联网搜索已自动执行")
+                            mode_prompt = mode_prompt.replace("上网搜信息（优先用这个）", "联网搜索已完成，请参考上方结果")
+                        break
+            except:
+                pass
         else:
             mode_prompt = mode_prompt.replace("上网搜索信息", "上网搜信息（用户主动提了再用）")
         lc_msgs = [SystemMessage(content=mode_prompt)] + [to_langchain(m) for m in client_msgs]
         all_msgs = None
         try:
-            current_agent = agent if modes.get("search") else agent_no_search
+            current_agent = agent_no_search
             for step in current_agent.stream({"messages": lc_msgs}):
                 for node, state in step.items():
                     msg = state["messages"][-1]
